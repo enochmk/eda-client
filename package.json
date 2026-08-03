@@ -1,0 +1,81 @@
+{
+  "name": "@enochmk/eda-client",
+  "version": "1.0.0",
+  "description": "Ericsson Data Access (EDA) SOAP API client for AirtelTigo",
+  "private": false,
+  "author": "Enoch Klufio",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enochmk/at-eda-hlr.git"
+  },
+  "homepage": "https://github.com/enochmk/at-eda-hlr#readme",
+  "bugs": {
+    "url": "https://github.com/enochmk/at-eda-hlr/issues"
+  },
+  "keywords": [
+    "eda",
+    "ericsson",
+    "airteltigo",
+    "soap",
+    "hlr",
+    "auc",
+    "telecom"
+  ],
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:login": "tsx tests/manual/login.ts",
+    "test:create-auc": "tsx tests/manual/create-auc.ts",
+    "test:create-hlr": "tsx tests/manual/create-hlr.ts",
+    "test:delete-hlr": "tsx tests/manual/delete-hlr.ts",
+    "test:bar-voice": "tsx tests/manual/bar-voice.ts",
+    "test:unbar-voice": "tsx tests/manual/unbar-voice.ts",
+    "test:unbar-internet": "tsx tests/manual/unbar-internet.ts",
+    "test:get-subscriber-status": "tsx tests/manual/get-subscriber-status.ts",
+    "test:check-voice-barred": "tsx tests/manual/check-voice-barred.ts",
+    "test:check-internet-blocked": "tsx tests/manual/check-internet-blocked.ts",
+    "prepack": "npm run typecheck && npm test && npm run build",
+    "prettier": "prettier --check .",
+    "prettier:fix": "prettier --write ."
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "fast-xml-parser": "^5.3.2",
+    "http-errors": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/http-errors": "^2.0.0",
+    "@types/node": "^25.5.2",
+    "axios-mock-adapter": "^2.1.0",
+    "dotenv": "^16.6.1",
+    "prettier": "^3.4.2",
+    "tsup": "^8.5.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
