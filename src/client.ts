@@ -36,20 +36,28 @@ export class EdaClient {
   }
 
   async getSessionId(force = false): Promise<string> {
-    if (this.sessionId && !force) return this.sessionId;
-    const rawXml = await this.transport.post(
-      '/CAI3G1.2/services/CAI3G1.2',
-      login(this.options.username, this.options.password),
-      'login',
-    );
-    const parsed = this.parse(rawXml, 'login');
-    const sessionId = findValue(parsed, ['sessionId', 'SessionId']);
-    if (!sessionId) {
-      throw createHttpError(502, 'EDA login succeeded without a session ID');
+    if (this.sessionId && !force) {
+      this.log('debug', 'login - reusing EDA session');
+      return this.sessionId;
     }
-    this.sessionId = sessionId;
-    this.log('info', 'EDA session established');
-    return sessionId;
+    try {
+      const rawXml = await this.transport.post(
+        '/CAI3G1.2/services/CAI3G1.2',
+        login(this.options.username, this.options.password),
+        'login',
+      );
+      const parsed = this.parse(rawXml, 'login');
+      const sessionId = findValue(parsed, ['sessionId', 'SessionId']);
+      if (!sessionId) {
+        throw createHttpError(502, 'EDA login succeeded without a session ID');
+      }
+      this.sessionId = sessionId;
+      this.log('info', 'login - EDA session established');
+      return sessionId;
+    } catch (error: unknown) {
+      this.log('error', 'login - failed', { error: this.errorMessage(error) });
+      throw error;
+    }
   }
 
   async createAuc(imsi: string, ki: string): Promise<EdaResponse> {
@@ -167,20 +175,28 @@ export class EdaClient {
     context: Record<string, unknown>,
     ignoredCodes: string[] = [],
   ): Promise<EdaResponse> {
-    const rawXml = await this.transport.post(path, xml, operation, context);
-    const data = this.parse(rawXml, operation);
-    const error = this.extractError(data);
-    if (error && !ignoredCodes.includes(error.code)) {
-      this.log('warn', `${operation} - EDA error`, { ...context, error });
-      throw this.toHttpError(error, operation);
-    }
-    if (error)
-      this.log('warn', `${operation} - ignored EDA response`, {
+    try {
+      const rawXml = await this.transport.post(path, xml, operation, context);
+      const data = this.parse(rawXml, operation);
+      const error = this.extractError(data);
+      if (error && !ignoredCodes.includes(error.code)) {
+        this.log('warn', `${operation} - EDA error`, { ...context, error });
+        throw this.toHttpError(error, operation);
+      }
+      if (error)
+        this.log('warn', `${operation} - ignored EDA response`, {
+          ...context,
+          error,
+        });
+      this.log('info', `${operation} - success`, context);
+      return { operation, data, rawXml };
+    } catch (error: unknown) {
+      this.log('error', `${operation} - failed`, {
         ...context,
-        error,
+        error: this.errorMessage(error),
       });
-    this.log('info', `${operation} - success`, context);
-    return { operation, data, rawXml };
+      throw error;
+    }
   }
 
   private parse(xml: string, operation: string): unknown {
@@ -237,6 +253,16 @@ export class EdaClient {
     message: string,
     context?: Record<string, unknown>,
   ): void {
-    this.options.logger[level]?.(message, context);
+    const logger = this.options.logger;
+    const method = logger[level];
+    if (typeof method === 'function') {
+      method(message, context);
+    } else if (level === 'info' && logger.log) {
+      logger.log(message, context);
+    }
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }

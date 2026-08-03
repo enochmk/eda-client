@@ -20,10 +20,13 @@ export class EdaTransport {
   }
 
   log(level: string, message: string, context?: Record<string, unknown>): void {
-    this.options.logger[level as keyof typeof this.options.logger]?.(
-      message,
-      context,
-    );
+    const logger = this.options.logger;
+    const method = logger[level as keyof typeof logger];
+    if (typeof method === 'function') {
+      method(message, context);
+    } else if (level === 'info' && logger.log) {
+      logger.log(message, context);
+    }
   }
 
   async post(
@@ -32,6 +35,11 @@ export class EdaTransport {
     operation: string,
     context?: Record<string, unknown>,
   ): Promise<string> {
+    const startedAt = Date.now();
+    this.log('verbose', `${operation} - sending request`, {
+      ...context,
+      path,
+    });
     try {
       const response = await axios.post<string>(this.url(path), xml, {
         headers: {
@@ -44,12 +52,20 @@ export class EdaTransport {
           rejectUnauthorized: this.options.rejectUnauthorized,
         }),
       });
+      this.log('verbose', `${operation} - received response`, {
+        ...context,
+        path,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+      });
       return response.data;
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'EDA request failed';
       this.log('error', `${operation} - request failed`, {
         ...context,
+        path,
+        durationMs: Date.now() - startedAt,
         error: message,
       });
       throw createHttpError(502, message);
