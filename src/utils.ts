@@ -1,4 +1,5 @@
 import createHttpError from 'http-errors';
+import type { EdaErrorDetails } from './types';
 
 export function escapeXml(value: string): string {
   return value
@@ -65,4 +66,49 @@ export function findObject(
     if (found) return found;
   }
   return undefined;
+}
+
+export function extractEdaError(data: unknown): EdaErrorDetails | undefined {
+  const soapFault = findObject(data, ['Fault']);
+  const cai3gFault = findObject(data, ['Cai3gFault']);
+  const pgFault = findObject(data, ['PGFault']);
+
+  const faultCode = findValue(soapFault ?? data, ['faultcode', 'faultCode']);
+  const cai3gFaultCode = findValue(cai3gFault, ['faultcode', 'faultCode']);
+  const pgErrorCode = findValue(pgFault, ['errorcode', 'errorCode']);
+  const responseCode = findValue(data, ['respCode']);
+  const code = pgErrorCode ?? responseCode ?? cai3gFaultCode ?? faultCode;
+
+  const soapMessage = findValue(soapFault ?? data, [
+    'faultstring',
+    'faultString',
+  ]);
+  const reasonText = findValue(cai3gFault ?? data, ['reasonText']);
+  const pgErrorMessage = findValue(pgFault, ['errormessage', 'errorMessage']);
+  const pgErrorDetails = findValue(pgFault, ['errordetails', 'errorDetails']);
+  const responseDescription = findValue(data, [
+    'respDescription',
+    'description',
+  ]);
+  const message =
+    pgErrorMessage ?? reasonText ?? responseDescription ?? soapMessage;
+  const description =
+    pgErrorDetails ?? responseDescription ?? pgErrorMessage ?? reasonText;
+  const faultRole = findValue(cai3gFault, ['faultrole', 'faultRole']);
+
+  if (!code && !message) return undefined;
+  return {
+    code: code ?? '500',
+    message: message ?? 'EDA SOAP fault',
+    faultCode,
+    faultRole,
+    cai3gFaultCode,
+    soapMessage,
+    pgErrorCode,
+    pgErrorMessage,
+    pgErrorDetails,
+    description,
+    raw: data,
+    type: pgFault ? 'SESSION' : 'UNKNOWN',
+  };
 }

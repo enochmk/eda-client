@@ -24,7 +24,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/enochmk/at-eda-hlr.git"
+    "url": "git+https://github.com/enochmk/at-eda-hlr.git"
   },
   "homepage": "https://github.com/enochmk/at-eda-hlr#readme",
   "bugs": {
@@ -46,7 +46,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:login": "tsx tests/manual/login.ts",
+    "test:logout": "tsx tests/manual/logout.ts",
     "test:create-auc": "tsx tests/manual/create-auc.ts",
+    "test:delete-auc": "tsx tests/manual/delete-auc.ts",
     "test:create-hlr": "tsx tests/manual/create-hlr.ts",
     "test:delete-hlr": "tsx tests/manual/delete-hlr.ts",
     "test:bar-voice": "tsx tests/manual/bar-voice.ts",

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { escapeXml } from './utils';
 
 const SOAP = 'http://schemas.xmlsoap.org/soap/envelope/';
@@ -7,6 +8,10 @@ const AUC = 'http://schemas.ericsson.com/ema/UserProvisioning/GsmAuc/';
 
 export function login(username: string, password: string): string {
   return `<soapenv:Envelope xmlns:soapenv="${SOAP}" xmlns:cai3="${CAI}"><soapenv:Header/><soapenv:Body><cai3:Login><cai3:userId>${escapeXml(username)}</cai3:userId><cai3:pwd>${escapeXml(password)}</cai3:pwd></cai3:Login></soapenv:Body></soapenv:Envelope>`;
+}
+
+export function logout(sessionId: string): string {
+  return `<SOAP-ENV:Envelope xmlns:SOAP-ENV="${SOAP}" xmlns:cai3g="${CAI}" xmlns:gsm="${HLR}"><SOAP-ENV:Header><cai3g:SessionId>${escapeXml(sessionId)}</cai3g:SessionId></SOAP-ENV:Header><SOAP-ENV:Body><cai3g:Logout><cai3g:sessionId>${escapeXml(sessionId)}</cai3g:sessionId></cai3g:Logout></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
 }
 
 function header(sessionId: string, transactionId = sessionId): string {
@@ -32,6 +37,10 @@ export function createAuc(
   ki: string,
 ): string {
   return `<SOAP-ENV:Envelope xmlns:SOAP-ENV="${SOAP}" xmlns:ns="${CAI}"><SOAP-ENV:Header><ns:SessionId>${escapeXml(sessionId)}</ns:SessionId><ns:TransactionId>eSIM-${escapeXml(requestId)}</ns:TransactionId><ns:SequenceId>${escapeXml(sessionId)}</ns:SequenceId></SOAP-ENV:Header><SOAP-ENV:Body><ns:Create><ns:MOType>Subscription@${AUC}</ns:MOType><ns:MOId><auc:imsi xmlns:auc="${AUC}">${escapeXml(imsi)}</auc:imsi></ns:MOId><ns:MOAttributes><auc:createSubscription xmlns:auc="${AUC}"><auc:imsi>${escapeXml(imsi)}</auc:imsi><auc:ki>${escapeXml(ki)}</auc:ki><auc:fsetind>0</auc:fsetind><auc:a4ind>2</auc:a4ind><auc:adkey>2</auc:adkey></auc:createSubscription></ns:MOAttributes></ns:Create></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+}
+
+export function deleteAuc(sessionId: string, imsi: string): string {
+  return `<SOAP-ENV:Envelope xmlns:SOAP-ENV="${SOAP}" xmlns:cai3g="${CAI}" xmlns:gsm="${AUC}"><SOAP-ENV:Header><cai3g:SequenceId>${escapeXml(sessionId)}</cai3g:SequenceId><cai3g:TransactionId>eSIM-${randomUUID()}</cai3g:TransactionId><cai3g:SessionId>${escapeXml(sessionId)}</cai3g:SessionId></SOAP-ENV:Header><SOAP-ENV:Body><cai3g:Delete><cai3g:MOType>Subscription@${AUC}</cai3g:MOType><cai3g:MOId><gsm:imsi>${escapeXml(imsi)}</gsm:imsi></cai3g:MOId></cai3g:Delete></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
 }
 
 export function createHlr(
@@ -74,5 +83,7 @@ export function unbarInternet(sessionId: string, msisdn: string): string {
 }
 
 export function getSubscriberStatus(sessionId: string, msisdn: string): string {
-  return `<soapenv:Envelope xmlns:soapenv="${SOAP}" xmlns:cai3="${CAI}" xmlns:gsm="${HLR}"><soapenv:Header><cai3:Context>?</cai3:Context>${header(sessionId)}</soapenv:Header><soapenv:Body><cai3:Get><cai3:MOType>Subscription@${HLR}</cai3:MOType><cai3:MOId><gsm:msisdn>233${escapeXml(msisdn)}</gsm:msisdn></cai3:MOId><cai3:MOAttributes/><cai3:extension/></cai3:Get></soapenv:Body></soapenv:Envelope>`;
+  const sequenceId = randomUUID();
+  const transactionId = randomUUID();
+  return `<soapenv:Envelope xmlns:soapenv="${SOAP}" xmlns:cai3="${CAI}" xmlns:gsm="${HLR}"><soapenv:Header><cai3:SessionId>${escapeXml(sessionId)}</cai3:SessionId><cai3:Context></cai3:Context><cai3:SequenceId>${sequenceId}</cai3:SequenceId><cai3:TransactionId>${transactionId}</cai3:TransactionId></soapenv:Header><soapenv:Body><cai3:Get><cai3:MOType>Subscription@${HLR}</cai3:MOType><cai3:MOId><gsm:msisdn>233${escapeXml(msisdn)}</gsm:msisdn></cai3:MOId><cai3:MOAttributes></cai3:MOAttributes><cai3:extension></cai3:extension></cai3:Get></soapenv:Body></soapenv:Envelope>`;
 }

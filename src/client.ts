@@ -3,9 +3,11 @@ import { randomUUID } from 'node:crypto';
 import {
   createAuc,
   createHlr,
+  deleteAuc,
   deleteHlr,
   getSubscriberStatus,
   login,
+  logout as logoutTemplate,
   setVoice,
   unbarInternet,
 } from './templates';
@@ -17,7 +19,12 @@ import type {
   Logger,
   SubscriberStatus,
 } from './types';
-import { findObject, findValue, normalizeMsisdn } from './utils';
+import {
+  extractEdaError,
+  findObject,
+  findValue,
+  normalizeMsisdn,
+} from './utils';
 
 export class EdaClient {
   private readonly options: ResolvedEdaOptions;
@@ -60,6 +67,21 @@ export class EdaClient {
     }
   }
 
+  async logout(): Promise<EdaResponse> {
+    if (!this.sessionId) {
+      throw createHttpError(400, 'EDA session is not established');
+    }
+
+    const response = await this.execute(
+      '/CAI3G1.2/services/CAI3G1.2',
+      logoutTemplate(this.sessionId),
+      'logout',
+      {},
+    );
+    this.sessionId = undefined;
+    return response;
+  }
+
   async createAuc(imsi: string, ki: string): Promise<EdaResponse> {
     const sessionId = await this.getSessionId();
     return this.execute(
@@ -68,6 +90,16 @@ export class EdaClient {
       'createAuc',
       { imsi },
       ['301'],
+    );
+  }
+
+  async deleteAuc(imsi: string): Promise<EdaResponse> {
+    const sessionId = await this.getSessionId();
+    return this.execute(
+      this.options.aucPath,
+      deleteAuc(sessionId, imsi),
+      'deleteAuc',
+      { imsi },
     );
   }
 
@@ -178,10 +210,10 @@ export class EdaClient {
     try {
       const rawXml = await this.transport.post(path, xml, operation, context);
       const data = this.parse(rawXml, operation);
-      const error = this.extractError(data);
+      const error = extractEdaError(data);
       if (error && !ignoredCodes.includes(error.code)) {
         this.log('warn', `${operation} - EDA error`, { ...context, error });
-        throw this.toHttpError(error, operation);
+        throw this.toHttpError(error, operation, rawXml);
       }
       if (error)
         this.log('warn', `${operation} - ignored EDA response`, {
@@ -214,38 +246,49 @@ export class EdaClient {
     }
   }
 
-  private extractError(data: unknown): EdaErrorDetails | undefined {
-    const faultCode = findValue(data, ['faultcode', 'faultCode']);
-    const code =
-      findValue(data, ['respCode', 'errorcode', 'errorCode']) ?? faultCode;
-    const description = findValue(data, [
-      'respDescription',
-      'errormessage',
-      'errorMessage',
-    ]);
-    const message =
-      findValue(data, ['faultstring', 'faultreason', 'reasonText']) ??
-      description;
-    if (!code && !message) return undefined;
-    return {
-      code: code ?? '500',
-      message: message ?? 'EDA SOAP fault',
-      faultCode,
-      description,
-      raw: data,
-      type: findValue(data, ['PGFault']) ? 'SESSION' : 'UNKNOWN',
-    };
-  }
-
-  private toHttpError(error: EdaErrorDetails, operation: string): Error {
+  private toHttpError(
+    error: EdaErrorDetails,
+    operation: string,
+    rawXml: string,
+  ): Error {
+    const sessionCodes = ['1001', '1005', '1010', '3014'];
     const status =
-      error.type === 'SESSION' && ['1005', '3014'].includes(error.code)
+      error.type === 'SESSION' &&
+      [error.code, error.cai3gFaultCode, error.pgErrorCode].some((code) =>
+        code ? sessionCodes.includes(code) : false,
+      )
         ? 401
         : 502;
-    return createHttpError(
+    const detail =
+      error.description && error.description !== error.message
+        ? ` - ${error.description}`
+        : '';
+    const httpError = createHttpError(
       status,
-      `${operation} failed (${error.code}): ${error.description ?? error.message}`,
+      `${operation} failed (${error.code}): ${error.message}${detail}`,
     );
+    httpError.expose = true;
+    httpError.data = {
+      code: error.code,
+      message: error.message,
+    };
+    httpError.metadata = {
+      operation,
+      httpStatus: status,
+      faultCode: error.faultCode,
+      faultRole: error.faultRole,
+      cai3gFaultCode: error.cai3gFaultCode,
+      soapMessage: error.soapMessage,
+      pgErrorCode: error.pgErrorCode,
+      pgErrorMessage: error.pgErrorMessage,
+      pgErrorDetails: error.pgErrorDetails,
+      description: error.description,
+      response: error.raw,
+      rawXml,
+    };
+    httpError.edaError = error;
+    httpError.rawXml = rawXml;
+    return httpError;
   }
 
   private log(

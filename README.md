@@ -2,13 +2,20 @@
 
 Typed TypeScript client for AirtelTigo Ericsson Data Access (EDA) SOAP services.
 
+The library wraps the Ericsson CAI3G SOAP API used to provision and inspect
+AirtelTigo AUC and HLR subscriber records. It handles XML request creation,
+session management, MSISDN normalization, XML parsing, structured EDA faults,
+and transport errors.
+
 ## Installation
 
 ```bash
 npm install @enochmk/eda-client
 ```
 
-## Usage
+## Configuration
+
+Create a client with the EDA base URL and credentials:
 
 ```ts
 import { EdaClient } from '@enochmk/eda-client';
@@ -18,31 +25,109 @@ const eda = new EdaClient({
   username: 'your-username',
   password: 'your-password',
 });
-
-await eda.createAuc('your-imsi', 'your-ki');
-await eda.createHlr('271004887', 'your-imsi');
-await eda.unbarInternet('271004887');
-
-const status = await eda.getSubscriberStatus('271004887');
-console.log(status.data);
 ```
 
-The client authenticates with EDA as needed and reuses the session for subsequent calls. A new session is created for a new client instance. MSISDNs may be supplied as 9, 10, or 12 digits and are normalized to the local 9-digit form before being sent to EDA.
+Optional settings are:
 
-## Actions
+- `timeout` — request timeout in milliseconds; defaults to `15000`.
+- `rejectUnauthorized` — TLS certificate validation; defaults to `true`.
+- `logger` — logger with optional `debug`, `verbose`, `info`, `warn`, and
+  `error` methods.
+- `aucPath` — AUC provisioning path; defaults to `/Provisioning`.
 
-- `getSessionId(force?)`
-- `createAuc(imsi, ki)`
-- `createHlr(msisdn, imsi)`
-- `deleteHlr(msisdn)`
-- `barVoice(msisdn)`
-- `unbarVoice(msisdn)`
-- `unbarInternet(msisdn)`
-- `getSubscriberStatus(msisdn)`
-- `checkVoiceBarred(msisdn)`
-- `checkInternetBlocked(msisdn)`
+## Usage
 
-Provisioning methods return `{ operation, data, rawXml }`. The status checks return booleans.
+The client logs in automatically before the first operation and reuses the
+session for subsequent operations. Call `logout()` when the client is done:
+
+```ts
+const eda = new EdaClient({
+  baseUrl: process.env.EDA_BASE_URL!,
+  username: process.env.EDA_USERNAME!,
+  password: process.env.EDA_PASSWORD!,
+});
+
+let sessionEstablished = false;
+try {
+  await eda.getSessionId();
+  sessionEstablished = true;
+
+  await eda.createAuc('your-imsi', 'your-ki');
+  await eda.createHlr('271004887', 'your-imsi');
+  await eda.unbarInternet('271004887');
+
+  const status = await eda.getSubscriberStatus('271004887');
+  console.log(status.data);
+} finally {
+  if (sessionEstablished) await eda.logout();
+}
+```
+
+MSISDNs may be supplied as 9, 10, or 12 digits. They are normalized to the
+local 9-digit form and sent to EDA with Ghana's `233` country code.
+
+## Operations
+
+- `getSessionId(force?)` — establish or reuse an EDA session.
+- `logout()` — close the active EDA session. It throws a `400` error if no
+  session has been established.
+- `createAuc(imsi, ki)` — create an authentication-center subscriber record.
+- `deleteAuc(imsi)` — delete an AUC subscriber record.
+- `createHlr(msisdn, imsi)` — create a home-location-register subscriber
+  profile.
+- `deleteHlr(msisdn)` — delete an HLR subscriber profile.
+- `barVoice(msisdn)` / `unbarVoice(msisdn)` — update voice barring.
+- `unbarInternet(msisdn)` — remove the internet block.
+- `getSubscriberStatus(msisdn)` — retrieve the complete parsed HLR profile.
+- `checkVoiceBarred(msisdn)` — return whether voice is barred.
+- `checkInternetBlocked(msisdn)` — return whether internet is blocked.
+
+Provisioning and status operations return:
+
+```ts
+{
+  operation: string;
+  data: unknown;
+  rawXml: string;
+}
+```
+
+The two `check*` methods return booleans.
+
+## Error handling
+
+EDA errors are thrown as `http-errors` instances. If EDA responds with a SOAP
+fault, the error includes the important values in `data` and the remaining
+fault context in `metadata`:
+
+```ts
+try {
+  await eda.getSubscriberStatus('271004887');
+} catch (error) {
+  const err = error as Error & {
+    status?: number;
+    data?: { code?: string; message?: string };
+    metadata?: {
+      operation?: string;
+      httpStatus?: number;
+      faultCode?: string;
+      cai3gFaultCode?: string;
+      faultRole?: string;
+      pgErrorCode?: string;
+      pgErrorDetails?: string;
+      response?: unknown;
+      rawXml?: string;
+    };
+  };
+
+  console.error(err.status, err.data?.code, err.data?.message);
+  console.error(err.metadata?.pgErrorDetails);
+}
+```
+
+Connection failures throw a `503` error stating that EDA is unreachable. An
+HTTP response from EDA preserves its HTTP status and response body. Existing
+`edaError` and `edaResponse` properties are also retained for compatibility.
 
 ## Manual commands
 
@@ -51,7 +136,9 @@ Copy `.env.example` to `.env` and fill in the EDA credentials and test identifie
 ```bash
 npm install
 npm run test:login
+npm run test:logout
 npm run test:create-auc
+npm run test:delete-auc
 npm run test:create-hlr
 npm run test:delete-hlr
 npm run test:bar-voice
@@ -67,6 +154,18 @@ MSISDN, IMSI, and Ki can be supplied as positional arguments where applicable:
 ```bash
 npm run test:create-hlr -- 271004887 233xxxxxxxxxxx
 npm run test:create-auc -- 233xxxxxxxxxxx abcdef0123456789abcdef0123456789
+npm run test:delete-auc -- 233xxxxxxxxxxx
 ```
 
-These commands perform live EDA operations. Run read-only status checks before running create, delete, or barring commands.
+These commands perform live EDA operations. `createAuc`, `deleteAuc`,
+`createHlr`, `deleteHlr`, and barring commands change subscriber state. Run
+read-only status checks before running them.
+
+## Development
+
+```bash
+npm run typecheck
+npm test
+npm run prettier
+npm run build
+```

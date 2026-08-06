@@ -22,6 +22,11 @@ export interface EdaErrorDetails {
   message: string;
   faultCode?: string;
   faultRole?: string;
+  cai3gFaultCode?: string;
+  soapMessage?: string;
+  pgErrorCode?: string;
+  pgErrorMessage?: string;
+  pgErrorDetails?: string;
   description?: string;
   type?: 'AUC' | 'HLR' | 'SESSION' | 'UNKNOWN';
   raw?: unknown;

@@ -2,7 +2,8 @@ import axios from 'axios';
 import https from 'node:https';
 import createHttpError from 'http-errors';
 import { XMLParser } from 'fast-xml-parser';
-import type { EdaClientOptions } from './types';
+import type { EdaClientOptions, EdaErrorDetails } from './types';
+import { extractEdaError } from './utils';
 
 export type ResolvedEdaOptions = Required<EdaClientOptions>;
 
@@ -44,7 +45,7 @@ export class EdaTransport {
       const response = await axios.post<string>(this.url(path), xml, {
         headers: {
           'Content-Type': 'text/xml',
-          SoapAction: operation === 'login' ? 'CAI3G#Login' : '',
+          SOAPAction: this.soapAction(operation),
         },
         timeout: this.options.timeout,
         timeoutErrorMessage: 'EDA request timed out',
@@ -60,15 +61,107 @@ export class EdaTransport {
       });
       return response.data;
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'EDA request failed';
+      const httpError = this.toHttpError(error, operation);
       this.log('error', `${operation} - request failed`, {
         ...context,
         path,
         durationMs: Date.now() - startedAt,
-        error: message,
+        error: httpError.message,
       });
-      throw createHttpError(502, message);
+      throw httpError;
+    }
+  }
+
+  private soapAction(operation: string): string {
+    const actions: Record<string, string> = {
+      login: 'Login',
+      logout: 'Logout',
+      createAuc: 'Create',
+      deleteAuc: 'Delete',
+      createHlr: 'Create',
+      deleteHlr: 'Delete',
+      barVoice: 'Set',
+      unbarVoice: 'Set',
+      unbarInternet: 'Set',
+      getSubscriberStatus: 'Get',
+    };
+    const action = actions[operation];
+    return action ? `CAI3G#${action}` : '';
+  }
+
+  private toHttpError(error: unknown, operation: string): Error {
+    if (axios.isAxiosError(error)) {
+      if (!error.response) {
+        const httpError = createHttpError(
+          503,
+          `EDA is unreachable during ${operation}: ${error.message}`,
+        );
+        httpError.expose = true;
+        httpError.code = error.code;
+        return httpError;
+      }
+
+      const responseBody = this.stringifyResponseBody(error.response.data);
+      const edaError = this.parseEdaError(error.response.data);
+      const message = edaError
+        ? `EDA returned HTTP ${error.response.status} during ${operation} (${edaError.code}): ${edaError.message}${edaError.description && edaError.description !== edaError.message ? ` - ${edaError.description}` : ''}`
+        : responseBody
+          ? `EDA returned HTTP ${error.response.status} during ${operation}: ${responseBody}`
+          : `EDA returned HTTP ${error.response.status} during ${operation}: ${error.message}`;
+      const httpError = createHttpError(error.response.status, message);
+      httpError.expose = true;
+      httpError.edaStatus = error.response.status;
+      httpError.edaResponse = error.response.data;
+      httpError.edaCode = error.code;
+      httpError.data = edaError
+        ? {
+            code: edaError.code,
+            message: edaError.message,
+          }
+        : {
+            message: responseBody || error.message,
+          };
+      httpError.metadata = {
+        operation,
+        httpStatus: error.response.status,
+        faultCode: edaError?.faultCode,
+        faultRole: edaError?.faultRole,
+        cai3gFaultCode: edaError?.cai3gFaultCode,
+        soapMessage: edaError?.soapMessage,
+        pgErrorCode: edaError?.pgErrorCode,
+        pgErrorMessage: edaError?.pgErrorMessage,
+        pgErrorDetails: edaError?.pgErrorDetails,
+        description: edaError?.description,
+        response: error.response.data,
+      };
+      if (edaError) httpError.edaError = edaError;
+      return httpError;
+    }
+
+    const message =
+      error instanceof Error ? error.message : 'EDA request failed';
+    const httpError = createHttpError(502, `EDA request failed: ${message}`);
+    httpError.expose = true;
+    httpError.cause = error;
+    return httpError;
+  }
+
+  private stringifyResponseBody(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (value === undefined || value === null) return '';
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  private parseEdaError(value: unknown): EdaErrorDetails | undefined {
+    if (typeof value !== 'string') return extractEdaError(value);
+    try {
+      return extractEdaError(this.parser.parse(value));
+    } catch {
+      return undefined;
     }
   }
 }
