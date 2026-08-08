@@ -4,6 +4,7 @@ export type {
   EdaErrorDetails,
   EdaRequestOptions,
   EdaResponse,
+  EdaWarning,
   Logger,
   RefreshNumberOptions,
   RefreshNumberResponse,

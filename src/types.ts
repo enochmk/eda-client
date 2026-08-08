@@ -60,10 +60,16 @@ export interface EdaErrorDetails {
   raw?: unknown;
 }
 
+export interface EdaWarning extends EdaErrorDetails {
+  ignored: true;
+  httpStatus?: number;
+}
+
 export interface EdaResponse<T = unknown> {
   operation: string;
   data: T;
   rawXml: string;
+  warnings?: EdaWarning[];
 }
 
 export interface RefreshNumberResponse {

@@ -16,6 +16,7 @@ import type {
   EdaErrorDetails,
   EdaRequestOptions,
   EdaResponse,
+  EdaWarning,
   Logger,
   RefreshNumberOptions,
   RefreshNumberResponse,
@@ -66,7 +67,7 @@ export class EdaClient {
       this.log('info', 'login - EDA session established');
       return sessionId;
     } catch (error: unknown) {
-      this.log('error', 'login - failed', { error: this.errorMessage(error) });
+      this.log('error', 'login - failed', { error: this.errorForLog(error) });
       throw error;
     }
   }
@@ -313,20 +314,101 @@ export class EdaClient {
         this.log('warn', `${operation} - EDA error`, { ...context, error });
         throw this.toHttpError(error, operation, rawXml);
       }
-      if (error)
+      const warning: EdaWarning | undefined = error
+        ? { ...error, ignored: true }
+        : undefined;
+      if (warning)
         this.log('warn', `${operation} - ignored EDA response`, {
           ...context,
-          error,
+          warning,
+          rawXml,
         });
       this.log('info', `${operation} - success`, context);
-      return { operation, data, rawXml };
+      return {
+        operation,
+        data,
+        rawXml,
+        ...(warning ? { warnings: [warning] } : {}),
+      };
     } catch (error: unknown) {
+      const ignoredResponse = this.toIgnoredResponse(
+        error,
+        operation,
+        ignoredCodes,
+      );
+      if (ignoredResponse) {
+        this.log('warn', `${operation} - ignored EDA HTTP response`, {
+          ...context,
+          warning: ignoredResponse.warnings?.[0],
+          rawXml: ignoredResponse.rawXml,
+        });
+        this.log('info', `${operation} - success`, context);
+        return ignoredResponse;
+      }
       this.log('error', `${operation} - failed`, {
         ...context,
-        error: this.errorMessage(error),
+        error: this.errorForLog(error),
       });
       throw error;
     }
+  }
+
+  private toIgnoredResponse(
+    error: unknown,
+    operation: string,
+    ignoredCodes: string[],
+  ): EdaResponse | undefined {
+    const code = this.errorCode(error);
+    if (!code || !ignoredCodes.includes(code)) return undefined;
+
+    const candidate = error as {
+      data?: unknown;
+      edaError?: EdaErrorDetails;
+      edaResponse?: unknown;
+      metadata?: { httpStatus?: number; response?: unknown };
+      status?: number;
+    };
+    const response =
+      candidate.edaResponse ??
+      candidate.metadata?.response ??
+      candidate.edaError?.raw ??
+      candidate.data;
+    const data = candidate.edaError?.raw ?? response ?? candidate.data ?? {};
+    const rawXml =
+      typeof response === 'string'
+        ? response
+        : (JSON.stringify(response ?? data) ?? '');
+    const fallbackMessage =
+      candidate.data &&
+      typeof candidate.data === 'object' &&
+      'message' in candidate.data
+        ? String(candidate.data.message)
+        : 'Ignored EDA response';
+    const warning: EdaWarning = candidate.edaError
+      ? {
+          ...candidate.edaError,
+          ignored: true,
+          httpStatus: candidate.metadata?.httpStatus ?? candidate.status,
+        }
+      : {
+          code,
+          message: fallbackMessage,
+          ignored: true,
+          httpStatus: candidate.metadata?.httpStatus ?? candidate.status,
+          raw: response,
+        };
+
+    return { operation, data, rawXml, warnings: [warning] };
+  }
+
+  private errorCode(error: unknown): string | undefined {
+    if (!error || typeof error !== 'object') return undefined;
+    const candidate = error as {
+      data?: { code?: unknown };
+      edaError?: { code?: unknown };
+    };
+    const code = candidate.edaError?.code ?? candidate.data?.code;
+    return code === undefined || code === null ? undefined : String(code);
   }
 
   private parse(xml: string, operation: string): unknown {
@@ -403,7 +485,30 @@ export class EdaClient {
     }
   }
 
-  private errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+  private errorForLog(error: unknown): unknown {
+    if (!(error instanceof Error)) return error;
+    const candidate = error as Error & {
+      cause?: unknown;
+      code?: unknown;
+      data?: unknown;
+      edaError?: unknown;
+      edaResponse?: unknown;
+      metadata?: unknown;
+      rawXml?: string;
+      status?: number;
+    };
+    return {
+      name: candidate.name,
+      message: candidate.message,
+      stack: candidate.stack,
+      status: candidate.status,
+      code: candidate.code,
+      data: candidate.data,
+      metadata: candidate.metadata,
+      edaError: candidate.edaError,
+      edaResponse: candidate.edaResponse,
+      rawXml: candidate.rawXml,
+      cause: candidate.cause,
+    };
   }
 }

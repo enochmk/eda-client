@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Treat configured idempotent EDA codes such as AUC `301` as success even when
+  EDA returns the SOAP fault with a non-2xx HTTP status.
+
 ## 1.0.1
 
 - Add request ID options to EDA operations.

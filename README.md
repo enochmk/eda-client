@@ -169,8 +169,23 @@ Provisioning and status operations return:
   operation: string;
   data: unknown;
   rawXml: string;
+  warnings?: Array<{
+    code: string;
+    message: string;
+    ignored: true;
+    httpStatus?: number;
+    raw?: unknown;
+  }>;
 }
 ```
+
+Idempotent EDA faults such as AUC code `301` are returned in `warnings` and
+logged at `warn` level with their parsed details and raw response. They do not
+stop composite operations such as `simSwap`.
+
+Non-ignored failures are still thrown. The configured logger receives their
+structured status, EDA data and metadata, raw response, stack, and cause at
+`error` level for troubleshooting.
 
 The two `check*` methods return booleans.
 

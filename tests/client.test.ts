@@ -297,6 +297,10 @@ describe('EdaClient', () => {
 
   it('swaps a number from the old IMSI to the target IMSI in EDA', async () => {
     const mock = new MockAdapter(axios);
+    const warnings: Array<{
+      message: string;
+      context?: Record<string, unknown>;
+    }> = [];
     const coreEndpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
     const aucEndpoint = 'https://eda.example/Provisioning';
 
@@ -329,14 +333,17 @@ describe('EdaClient', () => {
     mock
       .onPost(aucEndpoint)
       .replyOnce(
-        200,
-        '<S:Envelope><S:Body><CreateResponse /></S:Body></S:Envelope>',
+        500,
+        '<S:Envelope><S:Body><CreateResponse><respCode>301</respCode><respDescription>Target AUC already exists</respDescription></CreateResponse></S:Body></S:Envelope>',
       );
 
     const client = new EdaClient({
       baseUrl: 'https://eda.example',
       username: 'user',
       password: 'pass',
+      logger: {
+        warn: (message, context) => warnings.push({ message, context }),
+      },
     });
 
     const response = await client.simSwap('271004887', {
@@ -362,12 +369,37 @@ describe('EdaClient', () => {
     expect(requests[4].data).toContain('<cai3:Get>');
     expect(response.deleteAuc.operation).toBe('deleteAuc');
     expect(response.createAuc.operation).toBe('createAuc');
+    expect(response.createAuc.rawXml).toContain('<respCode>301</respCode>');
+    expect(response.createAuc.warnings).toEqual([
+      expect.objectContaining({
+        code: '301',
+        message: 'Target AUC already exists',
+        ignored: true,
+        httpStatus: 500,
+      }),
+    ]);
+    expect(warnings).toContainEqual({
+      message: 'createAuc - ignored EDA HTTP response',
+      context: expect.objectContaining({
+        imsi: 'target-imsi',
+        warning: expect.objectContaining({
+          code: '301',
+          ignored: true,
+          httpStatus: 500,
+        }),
+        rawXml: expect.stringContaining('<respCode>301</respCode>'),
+      }),
+    });
     expect(response.getHlr.operation).toBe('getSubscriberStatus');
     mock.restore();
   });
 
   it('preserves EDA HTTP errors and response bodies', async () => {
     const mock = new MockAdapter(axios);
+    const errors: Array<{
+      message: string;
+      context?: Record<string, unknown>;
+    }> = [];
     const responseBody =
       '<S:Envelope><S:Body><S:Fault><faultcode>EDA-500</faultcode><faultstring>Subscriber lookup failed</faultstring></S:Fault></S:Body></S:Envelope>';
     mock
@@ -383,6 +415,9 @@ describe('EdaClient', () => {
       baseUrl: 'https://eda.example',
       username: 'user',
       password: 'pass',
+      logger: {
+        error: (message, context) => errors.push({ message, context }),
+      },
     });
 
     await expect(client.getSubscriberStatus('271004887')).rejects.toMatchObject(
@@ -407,6 +442,25 @@ describe('EdaClient', () => {
         message: expect.stringContaining('Subscriber lookup failed'),
       },
     );
+    expect(errors).toContainEqual({
+      message: 'getSubscriberStatus - failed',
+      context: expect.objectContaining({
+        msisdn: '271004887',
+        error: expect.objectContaining({
+          status: 500,
+          data: {
+            code: 'EDA-500',
+            message: 'Subscriber lookup failed',
+          },
+          metadata: expect.objectContaining({
+            operation: 'getSubscriberStatus',
+            httpStatus: 500,
+            response: responseBody,
+          }),
+          edaResponse: responseBody,
+        }),
+      }),
+    });
     mock.restore();
   });
 
