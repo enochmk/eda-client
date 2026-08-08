@@ -33,7 +33,9 @@ Optional settings are:
 - `rejectUnauthorized` — TLS certificate validation; defaults to `true`.
 - `logger` — logger with optional `debug`, `verbose`, `info`, `warn`, and
   `error` methods.
-- `aucPath` — AUC provisioning path; defaults to `/Provisioning`.
+- `aucPath` — AUC create provisioning path; defaults to `/Provisioning`.
+  AUC deletion uses the core CAI3G endpoint
+  `/CAI3G1.2/services/CAI3G1.2`.
 
 ## Usage
 
@@ -69,18 +71,41 @@ local 9-digit form and sent to EDA with Ghana's `233` country code.
 ## Operations
 
 - `getSessionId(force?)` — establish or reuse an EDA session.
-- `logout()` — close the active EDA session. It throws a `400` error if no
-  session has been established.
-- `createAuc(imsi, ki)` — create an authentication-center subscriber record.
-- `deleteAuc(imsi)` — delete an AUC subscriber record.
-- `createHlr(msisdn, imsi)` — create a home-location-register subscriber
+- `logout(options?)` — close the active EDA session. It throws a `400` error if
+  no session has been established.
+- `createAuc(imsi, ki, options?)` — create an
+  authentication-center subscriber record.
+- `deleteAuc(imsi, options?)` — delete an AUC subscriber record.
+- `createHlr(msisdn, imsi, options?)` — create a
+  home-location-register subscriber profile.
+- `deleteHlr(msisdn, options?)` — delete an HLR subscriber profile.
+- `barVoice(msisdn, options?)` / `unbarVoice(msisdn, options?)` — update voice
+  barring.
+- `unbarInternet(msisdn, options?)` — remove the internet block.
+- `getSubscriberStatus(msisdn, options?)` — retrieve the complete parsed HLR
   profile.
-- `deleteHlr(msisdn)` — delete an HLR subscriber profile.
-- `barVoice(msisdn)` / `unbarVoice(msisdn)` — update voice barring.
-- `unbarInternet(msisdn)` — remove the internet block.
-- `getSubscriberStatus(msisdn)` — retrieve the complete parsed HLR profile.
-- `checkVoiceBarred(msisdn)` — return whether voice is barred.
-- `checkInternetBlocked(msisdn)` — return whether internet is blocked.
+- `checkVoiceBarred(msisdn, options?)` — return whether voice is barred.
+- `checkInternetBlocked(msisdn, options?)` — return whether internet is blocked.
+
+The optional request options object is:
+
+```ts
+{
+  sequenceId?: string;
+  transactionId?: string;
+}
+```
+
+For example:
+
+```ts
+await eda.createHlr(msisdn, imsi, { sequenceId, transactionId });
+await eda.deleteAuc(imsi, { sequenceId, transactionId });
+await eda.getSubscriberStatus(msisdn, { sequenceId, transactionId });
+```
+
+Each omitted ID is generated as a UUID, including when the entire options
+object is omitted.
 
 Provisioning and status operations return:
 

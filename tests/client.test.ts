@@ -42,7 +42,10 @@ describe('EdaClient', () => {
       },
     });
 
-    await client.getSubscriberStatus('271004887');
+    await client.getSubscriberStatus('271004887', {
+      sequenceId: 'sequence-status-1',
+      transactionId: 'transaction-status-1',
+    });
 
     expect(events.some((event) => event.includes('sending request'))).toBe(
       true,
@@ -75,7 +78,10 @@ describe('EdaClient', () => {
       password: 'pass',
     });
 
-    await client.getSubscriberStatus('271004887');
+    await client.getSubscriberStatus('271004887', {
+      sequenceId: 'sequence-status-1',
+      transactionId: 'transaction-status-1',
+    });
 
     const request = mock.history.post[1];
     expect(request.headers?.SOAPAction).toBe('CAI3G#Get');
@@ -84,8 +90,12 @@ describe('EdaClient', () => {
       '<cai3:SessionId>session-1</cai3:SessionId>',
     );
     expect(request.data).toContain('<cai3:Context></cai3:Context>');
-    expect(request.data).toContain('<cai3:SequenceId>');
-    expect(request.data).toContain('<cai3:TransactionId>');
+    expect(request.data).toContain(
+      '<cai3:SequenceId>sequence-status-1</cai3:SequenceId>',
+    );
+    expect(request.data).toContain(
+      '<cai3:TransactionId>transaction-status-1</cai3:TransactionId>',
+    );
     expect(request.data).toContain('<cai3:MOAttributes></cai3:MOAttributes>');
     expect(request.data).toContain('<cai3:extension></cai3:extension>');
     expect(request.data).toContain('<gsm:msisdn>233271004887</gsm:msisdn>');
@@ -120,13 +130,22 @@ describe('EdaClient', () => {
     });
 
     await client.getSessionId();
-    const response = await client.logout();
+    const response = await client.logout({
+      sequenceId: 'sequence-logout-1',
+      transactionId: 'transaction-logout-1',
+    });
     await client.getSessionId();
 
     expect(response.operation).toBe('logout');
     expect(mock.history.post[1].headers?.SOAPAction).toBe('CAI3G#Logout');
     expect(mock.history.post[1].data).toContain(
       '<cai3g:SessionId>session-1</cai3g:SessionId>',
+    );
+    expect(mock.history.post[1].data).toContain(
+      '<cai3g:SequenceId>sequence-logout-1</cai3g:SequenceId>',
+    );
+    expect(mock.history.post[1].data).toContain(
+      '<cai3g:TransactionId>transaction-logout-1</cai3g:TransactionId>',
     );
     expect(mock.history.post[1].data).toContain(
       '<cai3g:sessionId>session-1</cai3g:sessionId>',
@@ -140,10 +159,9 @@ describe('EdaClient', () => {
 
   it('builds AUC delete requests with the AUC SOAP contract', async () => {
     const mock = new MockAdapter(axios);
-    const loginEndpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
-    const endpoint = 'https://eda.example/Provisioning';
+    const endpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
     mock
-      .onPost(loginEndpoint)
+      .onPost(endpoint)
       .replyOnce(
         200,
         '<S:Envelope><S:Body><LoginResponse><sessionId>session-1</sessionId></LoginResponse></S:Body></S:Envelope>',
@@ -160,11 +178,20 @@ describe('EdaClient', () => {
       password: 'pass',
     });
 
-    const response = await client.deleteAuc('620031078646558');
+    const response = await client.deleteAuc('620031078646558', {
+      sequenceId: 'sequence-delete-auc-1',
+      transactionId: 'transaction-delete-auc-1',
+    });
     const request = mock.history.post[1];
 
     expect(response.operation).toBe('deleteAuc');
     expect(request.headers?.SOAPAction).toBe('CAI3G#Delete');
+    expect(request.data).toContain(
+      '<cai3g:SequenceId>sequence-delete-auc-1</cai3g:SequenceId>',
+    );
+    expect(request.data).toContain(
+      '<cai3g:TransactionId>transaction-delete-auc-1</cai3g:TransactionId>',
+    );
     expect(request.data).toContain(
       'xmlns:gsm="http://schemas.ericsson.com/ema/UserProvisioning/GsmAuc/"',
     );

@@ -8,6 +8,11 @@ export interface EdaClientOptions {
   aucPath?: string;
 }
 
+export interface EdaRequestOptions {
+  sequenceId?: string;
+  transactionId?: string;
+}
+
 export interface Logger {
   log?: (message: string, context?: Record<string, unknown>) => void;
   info?: (message: string, context?: Record<string, unknown>) => void;
