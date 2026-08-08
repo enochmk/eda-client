@@ -1,6 +1,6 @@
 {
   "name": "@enochmk/eda-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Ericsson Data Access (EDA) SOAP API client for AirtelTigo",
   "private": false,
   "author": "Enoch Klufio",
