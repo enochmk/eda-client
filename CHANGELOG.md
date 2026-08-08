@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Add request ID options to EDA operations.
+- Add number refresh and EDA-only SIM swap flows.
+- Route AUC deletion through the core CAI3G endpoint.
+
 ## 1.0.0
 
 - Initial EDA SOAP client for AirtelTigo Ericsson Data Access.
