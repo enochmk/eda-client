@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.3
+
+- Document every public operation, identifier rule, return type, and request-ID
+  option.
+- Document the complete refresh and EDA-only SIM swap sequences, target AUC
+  code `301` behavior, warnings, and partial-failure recovery requirements.
+
 ## 1.0.2
 
 - Treat configured idempotent EDA codes such as AUC `301` as success even when
