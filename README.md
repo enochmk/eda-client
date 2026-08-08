@@ -78,6 +78,10 @@ local 9-digit form and sent to EDA with Ghana's `233` country code.
 - `deleteAuc(imsi, options?)` — delete an AUC subscriber record.
 - `createHlr(msisdn, imsi, options?)` — create a
   home-location-register subscriber profile.
+- `refreshNumber(msisdn, imsi, ki, options?)` — delete and recreate the HLR
+  and AUC records, then return the final HLR status.
+- `simSwap(msisdn, params)` — replace the number's old IMSI/AUC records with a
+  target IMSI and Ki, then return the final HLR status.
 - `deleteHlr(msisdn, options?)` — delete an HLR subscriber profile.
 - `barVoice(msisdn, options?)` / `unbarVoice(msisdn, options?)` — update voice
   barring.
@@ -106,6 +110,57 @@ await eda.getSubscriberStatus(msisdn, { sequenceId, transactionId });
 
 Each omitted ID is generated as a UUID, including when the entire options
 object is omitted.
+
+To refresh a subscriber's HLR and AUC records:
+
+```ts
+const result = await eda.refreshNumber(msisdn, imsi, ki);
+console.log(result.getHlr.data);
+```
+
+The required values are the subscriber's `msisdn`, `imsi`, and `ki`. The
+optional fourth argument allows request IDs to be supplied independently for
+each step:
+
+```ts
+await eda.refreshNumber(msisdn, imsi, ki, {
+  deleteHlr: { sequenceId, transactionId },
+  deleteAuc: { sequenceId, transactionId },
+  createHlr: { sequenceId, transactionId },
+  createAuc: { sequenceId, transactionId },
+  getHlr: { sequenceId, transactionId },
+});
+```
+
+To perform a complete EDA-only SIM swap:
+
+```ts
+const result = await eda.simSwap(msisdn, {
+  oldImsi,
+  targetImsi,
+  targetKi,
+});
+
+console.log(result.getHlr.data);
+```
+
+EDA does not use ICCIDs. The caller must resolve the old and target SIM values
+before calling `simSwap`. Optional request IDs can be supplied per step:
+
+```ts
+await eda.simSwap(msisdn, {
+  oldImsi,
+  targetImsi,
+  targetKi,
+  requests: {
+    deleteHlr: { sequenceId, transactionId },
+    deleteAuc: { sequenceId, transactionId },
+    createHlr: { sequenceId, transactionId },
+    createAuc: { sequenceId, transactionId },
+    getHlr: { sequenceId, transactionId },
+  },
+});
+```
 
 Provisioning and status operations return:
 

@@ -5,5 +5,10 @@ export type {
   EdaRequestOptions,
   EdaResponse,
   Logger,
+  RefreshNumberOptions,
+  RefreshNumberResponse,
+  SimSwapParams,
+  SimSwapRequestOptions,
+  SimSwapResponse,
   SubscriberStatus,
 } from './types';

@@ -206,6 +206,166 @@ describe('EdaClient', () => {
     mock.restore();
   });
 
+  it('refreshes a number in the required EDA operation order', async () => {
+    const mock = new MockAdapter(axios);
+    const coreEndpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
+    const aucEndpoint = 'https://eda.example/Provisioning';
+
+    mock
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><LoginResponse><sessionId>session-1</sessionId></LoginResponse></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><DeleteResponse /></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><DeleteResponse /></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><CreateResponse /></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><GetResponse><MOAttributes><getResponseSubscription><obi>0</obi><obo>0</obo></getResponseSubscription></MOAttributes></GetResponse></S:Body></S:Envelope>',
+      );
+    mock
+      .onPost(aucEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><CreateResponse /></S:Body></S:Envelope>',
+      );
+
+    const client = new EdaClient({
+      baseUrl: 'https://eda.example',
+      username: 'user',
+      password: 'pass',
+    });
+
+    const response = await client.refreshNumber(
+      '271004887',
+      '620031078646558',
+      'abcdef0123456789abcdef0123456789',
+    );
+    const requests = mock.history.post.slice(1);
+    const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+    expect(requests.map((request) => request.url)).toEqual([
+      coreEndpoint,
+      coreEndpoint,
+      coreEndpoint,
+      aucEndpoint,
+      coreEndpoint,
+    ]);
+    expect(requests.map((request) => request.headers?.SOAPAction)).toEqual([
+      'CAI3G#Delete',
+      'CAI3G#Delete',
+      'CAI3G#Create',
+      'CAI3G#Create',
+      'CAI3G#Get',
+    ]);
+    expect(requests[0].data).toContain('<gsm:msisdn>233271004887</gsm:msisdn>');
+    expect(requests[1].data).toContain('<gsm:imsi>620031078646558</gsm:imsi>');
+    expect(requests[2].data).toContain('<gsm:createSubscription');
+    expect(requests[3].data).toContain('<auc:createSubscription');
+    expect(requests[4].data).toContain('<cai3:Get>');
+
+    for (const request of requests) {
+      expect(request.data).toMatch(
+        new RegExp(`<[^:]+:SequenceId>${uuid}</[^:]+:SequenceId>`, 'i'),
+      );
+      expect(request.data).toMatch(
+        new RegExp(`<[^:]+:TransactionId>${uuid}</[^:]+:TransactionId>`, 'i'),
+      );
+    }
+
+    expect(response.deleteHlr.operation).toBe('deleteHlr');
+    expect(response.deleteAuc.operation).toBe('deleteAuc');
+    expect(response.createHlr.operation).toBe('createHlr');
+    expect(response.createAuc.operation).toBe('createAuc');
+    expect(response.getHlr.operation).toBe('getSubscriberStatus');
+    mock.restore();
+  });
+
+  it('swaps a number from the old IMSI to the target IMSI in EDA', async () => {
+    const mock = new MockAdapter(axios);
+    const coreEndpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
+    const aucEndpoint = 'https://eda.example/Provisioning';
+
+    mock
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><LoginResponse><sessionId>session-1</sessionId></LoginResponse></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><DeleteResponse /></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><DeleteResponse /></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><CreateResponse /></S:Body></S:Envelope>',
+      )
+      .onPost(coreEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><GetResponse><MOAttributes><getResponseSubscription><imsi>target-imsi</imsi></getResponseSubscription></MOAttributes></GetResponse></S:Body></S:Envelope>',
+      );
+    mock
+      .onPost(aucEndpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><CreateResponse /></S:Body></S:Envelope>',
+      );
+
+    const client = new EdaClient({
+      baseUrl: 'https://eda.example',
+      username: 'user',
+      password: 'pass',
+    });
+
+    const response = await client.simSwap('271004887', {
+      oldImsi: 'old-imsi',
+      targetImsi: 'target-imsi',
+      targetKi: 'target-ki',
+    });
+    const requests = mock.history.post.slice(1);
+
+    expect(requests.map((request) => request.headers?.SOAPAction)).toEqual([
+      'CAI3G#Delete',
+      'CAI3G#Delete',
+      'CAI3G#Create',
+      'CAI3G#Create',
+      'CAI3G#Get',
+    ]);
+    expect(requests[0].data).toContain('<gsm:msisdn>233271004887</gsm:msisdn>');
+    expect(requests[1].data).toContain('<gsm:imsi>old-imsi</gsm:imsi>');
+    expect(requests[1].data).not.toContain('target-imsi');
+    expect(requests[2].data).toContain('<gsm:imsi>target-imsi</gsm:imsi>');
+    expect(requests[3].data).toContain('<auc:imsi>target-imsi</auc:imsi>');
+    expect(requests[3].data).toContain('<auc:ki>target-ki</auc:ki>');
+    expect(requests[4].data).toContain('<cai3:Get>');
+    expect(response.deleteAuc.operation).toBe('deleteAuc');
+    expect(response.createAuc.operation).toBe('createAuc');
+    expect(response.getHlr.operation).toBe('getSubscriberStatus');
+    mock.restore();
+  });
+
   it('preserves EDA HTTP errors and response bodies', async () => {
     const mock = new MockAdapter(axios);
     const responseBody =

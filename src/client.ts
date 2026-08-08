@@ -17,6 +17,10 @@ import type {
   EdaRequestOptions,
   EdaResponse,
   Logger,
+  RefreshNumberOptions,
+  RefreshNumberResponse,
+  SimSwapParams,
+  SimSwapResponse,
   SubscriberStatus,
 } from './types';
 import {
@@ -127,6 +131,69 @@ export class EdaClient {
       },
       ['2', '301'],
     );
+  }
+
+  async refreshNumber(
+    msisdn: string,
+    imsi: string,
+    ki: string,
+    options: RefreshNumberOptions = {},
+  ): Promise<RefreshNumberResponse> {
+    await this.getSessionId();
+
+    const deleteHlrResponse = await this.deleteHlr(msisdn, options.deleteHlr);
+    const deleteAucResponse = await this.deleteAuc(imsi, options.deleteAuc);
+    const createHlrResponse = await this.createHlr(
+      msisdn,
+      imsi,
+      options.createHlr,
+    );
+    const createAucResponse = await this.createAuc(imsi, ki, options.createAuc);
+    const getHlrResponse = await this.getSubscriberStatus(
+      msisdn,
+      options.getHlr,
+    );
+
+    return {
+      deleteHlr: deleteHlrResponse,
+      deleteAuc: deleteAucResponse,
+      createHlr: createHlrResponse,
+      createAuc: createAucResponse,
+      getHlr: getHlrResponse,
+    };
+  }
+
+  async simSwap(
+    msisdn: string,
+    params: SimSwapParams,
+  ): Promise<SimSwapResponse> {
+    const { oldImsi, targetImsi, targetKi, requests = {} } = params;
+    await this.getSessionId();
+
+    const deleteHlrResponse = await this.deleteHlr(msisdn, requests.deleteHlr);
+    const deleteAucResponse = await this.deleteAuc(oldImsi, requests.deleteAuc);
+    const createHlrResponse = await this.createHlr(
+      msisdn,
+      targetImsi,
+      requests.createHlr,
+    );
+    const createAucResponse = await this.createAuc(
+      targetImsi,
+      targetKi,
+      requests.createAuc,
+    );
+    const getHlrResponse = await this.getSubscriberStatus(
+      msisdn,
+      requests.getHlr,
+    );
+
+    return {
+      deleteHlr: deleteHlrResponse,
+      deleteAuc: deleteAucResponse,
+      createHlr: createHlrResponse,
+      createAuc: createAucResponse,
+      getHlr: getHlrResponse,
+    };
   }
 
   async deleteHlr(

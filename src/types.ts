@@ -13,6 +13,29 @@ export interface EdaRequestOptions {
   transactionId?: string;
 }
 
+export interface RefreshNumberOptions {
+  deleteHlr?: EdaRequestOptions;
+  deleteAuc?: EdaRequestOptions;
+  createHlr?: EdaRequestOptions;
+  createAuc?: EdaRequestOptions;
+  getHlr?: EdaRequestOptions;
+}
+
+export interface SimSwapRequestOptions {
+  deleteHlr?: EdaRequestOptions;
+  deleteAuc?: EdaRequestOptions;
+  createHlr?: EdaRequestOptions;
+  createAuc?: EdaRequestOptions;
+  getHlr?: EdaRequestOptions;
+}
+
+export interface SimSwapParams {
+  oldImsi: string;
+  targetImsi: string;
+  targetKi: string;
+  requests?: SimSwapRequestOptions;
+}
+
 export interface Logger {
   log?: (message: string, context?: Record<string, unknown>) => void;
   info?: (message: string, context?: Record<string, unknown>) => void;
@@ -41,6 +64,22 @@ export interface EdaResponse<T = unknown> {
   operation: string;
   data: T;
   rawXml: string;
+}
+
+export interface RefreshNumberResponse {
+  deleteHlr: EdaResponse;
+  deleteAuc: EdaResponse;
+  createHlr: EdaResponse;
+  createAuc: EdaResponse;
+  getHlr: EdaResponse<SubscriberStatus>;
+}
+
+export interface SimSwapResponse {
+  deleteHlr: EdaResponse;
+  deleteAuc: EdaResponse;
+  createHlr: EdaResponse;
+  createAuc: EdaResponse;
+  getHlr: EdaResponse<SubscriberStatus>;
 }
 
 export interface SubscriberStatus {
