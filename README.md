@@ -70,26 +70,39 @@ local 9-digit form and sent to EDA with Ghana's `233` country code.
 
 ## Operations
 
-- `getSessionId(force?)` — establish or reuse an EDA session.
-- `logout(options?)` — close the active EDA session. It throws a `400` error if
-  no session has been established.
-- `createAuc(imsi, ki, options?)` — create an
-  authentication-center subscriber record.
-- `deleteAuc(imsi, options?)` — delete an AUC subscriber record.
-- `createHlr(msisdn, imsi, options?)` — create a
-  home-location-register subscriber profile.
-- `refreshNumber(msisdn, imsi, ki, options?)` — delete and recreate the HLR
-  and AUC records, then return the final HLR status.
-- `simSwap(msisdn, params)` — replace the number's old IMSI/AUC records with a
-  target IMSI and Ki, then return the final HLR status.
-- `deleteHlr(msisdn, options?)` — delete an HLR subscriber profile.
-- `barVoice(msisdn, options?)` / `unbarVoice(msisdn, options?)` — update voice
-  barring.
-- `unbarInternet(msisdn, options?)` — remove the internet block.
-- `getSubscriberStatus(msisdn, options?)` — retrieve the complete parsed HLR
-  profile.
-- `checkVoiceBarred(msisdn, options?)` — return whether voice is barred.
-- `checkInternetBlocked(msisdn, options?)` — return whether internet is blocked.
+Every operation except login accepts request IDs in its final optional options
+object. Operations establish an EDA session automatically when needed.
+
+| Function                                    | Required parameters                           | What it does                                                                                                                                                       |
+| ------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `getSessionId(force?)`                      | None                                          | Logs in and returns the session ID. Reuses the cached session unless `force` is `true`.                                                                            |
+| `logout(options?)`                          | None                                          | Logs out and clears the cached session. Throws status `400` if no session exists.                                                                                  |
+| `createAuc(imsi, ki, options?)`             | `imsi`, `ki`                                  | Creates the authentication-center record. EDA code `301` is treated as an idempotent success and returned as a warning.                                            |
+| `deleteAuc(imsi, options?)`                 | `imsi`                                        | Deletes the AUC record identified by IMSI.                                                                                                                         |
+| `createHlr(msisdn, imsi, options?)`         | `msisdn`, `imsi`                              | Creates the HLR subscription using the library's provisioned voice, SMS, data, forwarding, and profile defaults. EDA codes `2` and `301` are returned as warnings. |
+| `deleteHlr(msisdn, options?)`               | `msisdn`                                      | Deletes the HLR subscription identified by MSISDN.                                                                                                                 |
+| `barVoice(msisdn, options?)`                | `msisdn`                                      | Sets both outgoing and incoming voice-barring values (`obo` and `obi`) to `1`.                                                                                     |
+| `unbarVoice(msisdn, options?)`              | `msisdn`                                      | Sets both voice-barring values to `0`.                                                                                                                             |
+| `unbarInternet(msisdn, options?)`           | `msisdn`                                      | Sets `pdpcp=1`, `nam.prov=0`, and `nam.keep=1` to remove the internet block.                                                                                       |
+| `getSubscriberStatus(msisdn, options?)`     | `msisdn`                                      | Gets and parses the complete HLR subscriber profile.                                                                                                               |
+| `checkVoiceBarred(msisdn, options?)`        | `msisdn`                                      | Returns `true` when either `obi` or `obo` equals `1`.                                                                                                              |
+| `checkInternetBlocked(msisdn, options?)`    | `msisdn`                                      | Returns `true` when `nam.prov` equals `1`.                                                                                                                         |
+| `refreshNumber(msisdn, imsi, ki, options?)` | `msisdn`, current `imsi`, current `ki`        | Rebuilds the same subscriber's HLR and AUC records and returns each step.                                                                                          |
+| `simSwap(msisdn, params)`                   | `msisdn`, `oldImsi`, `targetImsi`, `targetKi` | Moves the MSISDN from the old IMSI to the target IMSI entirely within EDA and returns each step.                                                                   |
+
+### Identifier rules
+
+- `msisdn` may contain formatting characters, but its digits must total 9, 10,
+  or 12. The client keeps the final 9 digits and sends them with country code
+  `233`.
+- `imsi` is passed to EDA unchanged. The library does not derive or validate it.
+- `ki` is required only when creating an AUC record. Treat it as sensitive
+  authentication material.
+- EDA does not use an ICCID in these calls. For a SIM swap, the caller must
+  resolve the target ICCID to its `targetImsi` and `targetKi` before invoking
+  this library.
+
+### Request IDs
 
 The optional request options object is:
 
@@ -109,18 +122,57 @@ await eda.getSubscriberStatus(msisdn, { sequenceId, transactionId });
 ```
 
 Each omitted ID is generated as a UUID, including when the entire options
-object is omitted.
+object is omitted. `sequenceId` and `transactionId` are generated independently
+for every SOAP operation. They are not the EDA session ID.
 
-To refresh a subscriber's HLR and AUC records:
+### Return values
+
+Mutation and status operations return an `EdaResponse`:
+
+```ts
+interface EdaResponse<T = unknown> {
+  operation: string;
+  data: T; // parsed EDA XML
+  rawXml: string; // original EDA response
+  warnings?: Array<{
+    code: string;
+    message: string;
+    ignored: true;
+    httpStatus?: number;
+    raw?: unknown;
+  }>;
+}
+```
+
+`getSubscriberStatus` returns `EdaResponse<SubscriberStatus>`. The two `check*`
+functions return booleans. `refreshNumber` and `simSwap` return an object
+containing the response from every completed step.
+
+## Refreshing a number
+
+Use `refreshNumber` when the MSISDN is acting up but must remain on the same SIM
+identity. It deletes and recreates the subscriber using the supplied valid IMSI
+and Ki.
+
+The exact sequence is:
+
+```text
+Get/reuse session
+  -> Delete HLR by MSISDN
+  -> Delete AUC by IMSI
+  -> Create HLR with MSISDN + IMSI
+  -> Create AUC with IMSI + Ki
+  -> Get final HLR status by MSISDN
+```
+
+Basic usage:
 
 ```ts
 const result = await eda.refreshNumber(msisdn, imsi, ki);
 console.log(result.getHlr.data);
 ```
 
-The required values are the subscriber's `msisdn`, `imsi`, and `ki`. The
-optional fourth argument allows request IDs to be supplied independently for
-each step:
+The optional fourth argument supplies request IDs independently for each step:
 
 ```ts
 await eda.refreshNumber(msisdn, imsi, ki, {
@@ -132,7 +184,36 @@ await eda.refreshNumber(msisdn, imsi, ki, {
 });
 ```
 
-To perform a complete EDA-only SIM swap:
+The result has `deleteHlr`, `deleteAuc`, `createHlr`, `createAuc`, and `getHlr`
+properties. Check the final status and inspect `warnings` on each response.
+
+## Complete EDA SIM swap
+
+Use `simSwap` to move an existing MSISDN from its old IMSI to a target SIM's
+IMSI. This function operates only on EDA; it does not read an ICCID or update
+another client or system.
+
+Required input:
+
+| Parameter    | Meaning                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `msisdn`     | Number currently linked to the old SIM and to be linked to the target SIM.                                               |
+| `oldImsi`    | IMSI currently associated with the number. Its AUC record is deleted to completely unlink and free the old SIM identity. |
+| `targetImsi` | IMSI belonging to the target SIM. It is used for the new HLR and AUC records.                                            |
+| `targetKi`   | Ki belonging to `targetImsi`. It is used only when creating the target AUC record.                                       |
+
+The exact sequence is:
+
+```text
+Get/reuse session
+  -> Delete HLR by MSISDN
+  -> Delete old AUC by oldImsi
+  -> Create HLR with MSISDN + targetImsi
+  -> Create/accept target AUC with targetImsi + targetKi
+  -> Get final HLR status by MSISDN
+```
+
+Basic usage:
 
 ```ts
 const result = await eda.simSwap(msisdn, {
@@ -144,8 +225,7 @@ const result = await eda.simSwap(msisdn, {
 console.log(result.getHlr.data);
 ```
 
-EDA does not use ICCIDs. The caller must resolve the old and target SIM values
-before calling `simSwap`. Optional request IDs can be supplied per step:
+Optional request IDs can be supplied per step:
 
 ```ts
 await eda.simSwap(msisdn, {
@@ -162,32 +242,46 @@ await eda.simSwap(msisdn, {
 });
 ```
 
-Provisioning and status operations return:
+The result has the same five response properties as `refreshNumber`:
+`deleteHlr`, `deleteAuc`, `createHlr`, `createAuc`, and `getHlr`.
+
+### Existing target AUC and code 301
+
+`simSwap` deliberately deletes the AUC for `oldImsi`; it does not delete the
+AUC for `targetImsi`. Deleting the target AUC first is unnecessary when it
+already contains the intended IMSI and Ki, and would create an avoidable gap.
+
+The client still calls `createAuc(targetImsi, targetKi)`. If EDA responds with
+code `301` because that target AUC already exists, the client:
+
+- treats the step as successful so the SIM swap continues;
+- preserves the EDA fault in `result.createAuc.warnings`;
+- includes the parsed details, original response, and HTTP status when
+  available; and
+- logs the ignored response at `warn` level.
+
+Code `301` proves that the AUC record exists, but it does not prove that its
+stored Ki equals `targetKi`. The caller must ensure the ICCID-to-IMSI/Ki source
+is authoritative before starting the swap.
+
+### Composite-operation failure behavior
+
+`refreshNumber` and `simSwap` run sequentially and stop on the first
+non-ignored error. They do not roll back earlier EDA changes. For example, if
+target AUC creation fails after HLR creation, the new HLR remains in EDA and the
+caller must use the error details and operation logs to recover safely.
+
+Successful idempotent responses are not hidden:
 
 ```ts
-{
-  operation: string;
-  data: unknown;
-  rawXml: string;
-  warnings?: Array<{
-    code: string;
-    message: string;
-    ignored: true;
-    httpStatus?: number;
-    raw?: unknown;
-  }>;
+const result = await eda.simSwap(msisdn, params);
+
+for (const [step, response] of Object.entries(result)) {
+  if (response.warnings?.length) {
+    console.warn(step, response.warnings);
+  }
 }
 ```
-
-Idempotent EDA faults such as AUC code `301` are returned in `warnings` and
-logged at `warn` level with their parsed details and raw response. They do not
-stop composite operations such as `simSwap`.
-
-Non-ignored failures are still thrown. The configured logger receives their
-structured status, EDA data and metadata, raw response, stack, and cause at
-`error` level for troubleshooting.
-
-The two `check*` methods return booleans.
 
 ## Error handling
 
@@ -223,6 +317,12 @@ try {
 Connection failures throw a `503` error stating that EDA is unreachable. An
 HTTP response from EDA preserves its HTTP status and response body. Existing
 `edaError` and `edaResponse` properties are also retained for compatibility.
+
+The configured logger records the operation name and subscriber context for
+the request lifecycle. Ignored EDA faults are logged at `warn`; failures are
+logged at `error` with the message, stack, status, code, structured EDA data,
+metadata, raw XML/response, and cause when available. The Ki is not included in
+the logging context.
 
 ## Manual commands
 
