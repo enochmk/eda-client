@@ -35,6 +35,7 @@ export class EdaClient {
   private readonly options: ResolvedEdaOptions;
   private readonly transport: EdaTransport;
   private sessionId?: string;
+  private loginPromise?: Promise<string>;
 
   constructor(options: EdaClientOptions) {
     this.options = {
@@ -52,6 +53,18 @@ export class EdaClient {
       this.log('debug', 'login - reusing EDA session');
       return this.sessionId;
     }
+
+    if (this.loginPromise) return this.loginPromise;
+
+    this.loginPromise = this.login();
+    try {
+      return await this.loginPromise;
+    } finally {
+      this.loginPromise = undefined;
+    }
+  }
+
+  private async login(): Promise<string> {
     try {
       const rawXml = await this.transport.post(
         '/CAI3G1.2/services/CAI3G1.2',
@@ -92,10 +105,9 @@ export class EdaClient {
     ki: string,
     options?: EdaRequestOptions,
   ): Promise<EdaResponse> {
-    const sessionId = await this.getSessionId();
-    return this.execute(
+    return this.executeWithSession(
       this.options.aucPath,
-      createAuc(sessionId, imsi, ki, options),
+      (sessionId) => createAuc(sessionId, imsi, ki, options),
       'createAuc',
       { imsi },
       ['301'],
@@ -106,10 +118,9 @@ export class EdaClient {
     imsi: string,
     options?: EdaRequestOptions,
   ): Promise<EdaResponse> {
-    const sessionId = await this.getSessionId();
-    return this.execute(
+    return this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
-      deleteAuc(sessionId, imsi, options),
+      (sessionId) => deleteAuc(sessionId, imsi, options),
       'deleteAuc',
       { imsi },
     );
@@ -121,10 +132,9 @@ export class EdaClient {
     options?: EdaRequestOptions,
   ): Promise<EdaResponse> {
     const normalized = normalizeMsisdn(msisdn);
-    const sessionId = await this.getSessionId();
-    return this.execute(
+    return this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
-      createHlr(sessionId, normalized, imsi, options),
+      (sessionId) => createHlr(sessionId, normalized, imsi, options),
       'createHlr',
       {
         msisdn: normalized,
@@ -202,10 +212,9 @@ export class EdaClient {
     options?: EdaRequestOptions,
   ): Promise<EdaResponse> {
     const normalized = normalizeMsisdn(msisdn);
-    const sessionId = await this.getSessionId();
-    return this.execute(
+    return this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
-      deleteHlr(sessionId, normalized, options),
+      (sessionId) => deleteHlr(sessionId, normalized, options),
       'deleteHlr',
       {
         msisdn: normalized,
@@ -232,10 +241,9 @@ export class EdaClient {
     options?: EdaRequestOptions,
   ): Promise<EdaResponse> {
     const normalized = normalizeMsisdn(msisdn);
-    const sessionId = await this.getSessionId();
-    return this.execute(
+    return this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
-      unbarInternet(sessionId, normalized, options),
+      (sessionId) => unbarInternet(sessionId, normalized, options),
       'unbarInternet',
       {
         msisdn: normalized,
@@ -248,10 +256,9 @@ export class EdaClient {
     options?: EdaRequestOptions,
   ): Promise<EdaResponse<SubscriberStatus>> {
     const normalized = normalizeMsisdn(msisdn);
-    const sessionId = await this.getSessionId();
-    const response = await this.execute(
+    const response = await this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
-      getSubscriberStatus(sessionId, normalized, options),
+      (sessionId) => getSubscriberStatus(sessionId, normalized, options),
       'getSubscriberStatus',
       {
         msisdn: normalized,
@@ -287,11 +294,10 @@ export class EdaClient {
     options?: EdaRequestOptions,
   ): Promise<EdaResponse> {
     const normalized = normalizeMsisdn(msisdn);
-    const sessionId = await this.getSessionId();
     const operation = barred ? 'barVoice' : 'unbarVoice';
-    return this.execute(
+    return this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
-      setVoice(sessionId, normalized, barred, options),
+      (sessionId) => setVoice(sessionId, normalized, barred, options),
       operation,
       {
         msisdn: normalized,
@@ -351,6 +357,64 @@ export class EdaClient {
       });
       throw error;
     }
+  }
+
+  private async executeWithSession(
+    path: string,
+    buildRequest: (sessionId: string) => string,
+    operation: string,
+    context: Record<string, unknown>,
+    ignoredCodes: string[] = [],
+  ): Promise<EdaResponse> {
+    const sessionId = await this.getSessionId();
+
+    try {
+      return await this.execute(
+        path,
+        buildRequest(sessionId),
+        operation,
+        context,
+        ignoredCodes,
+      );
+    } catch (error: unknown) {
+      if (!this.isSessionError(error)) throw error;
+
+      this.log(
+        'warn',
+        `${operation} - EDA session expired; re-authenticating`,
+        {
+          ...context,
+        },
+      );
+      if (this.sessionId === sessionId) this.sessionId = undefined;
+
+      const refreshedSessionId = await this.getSessionId();
+      return this.execute(
+        path,
+        buildRequest(refreshedSessionId),
+        operation,
+        context,
+        ignoredCodes,
+      );
+    }
+  }
+
+  private isSessionError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const candidate = error as {
+      status?: number;
+      edaError?: EdaErrorDetails;
+    };
+    const sessionCodes = ['1001', '1005', '1010', '3014'];
+    const edaError = candidate.edaError;
+    return (
+      Boolean(
+        edaError?.type === 'SESSION' &&
+        [edaError.code, edaError.cai3gFaultCode, edaError.pgErrorCode].some(
+          (code) => code && sessionCodes.includes(code),
+        ),
+      ) || candidate.status === 401
+    );
   }
 
   private toIgnoredResponse(

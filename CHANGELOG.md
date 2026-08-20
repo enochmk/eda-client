@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4
+
+- Recover once from expired or invalid EDA sessions by re-authenticating and
+  rebuilding the failed SOAP request with the new session ID.
+- Deduplicate concurrent login requests and add session-recovery regression
+  coverage.
+
 ## 1.0.3
 
 - Document every public operation, identifier rule, return type, and request-ID

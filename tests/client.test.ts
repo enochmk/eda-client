@@ -497,6 +497,13 @@ describe('EdaClient', () => {
         '<S:Envelope><S:Body><LoginResponse><sessionId>session-1</sessionId></LoginResponse></S:Body></S:Envelope>',
       )
       .onPost('https://eda.example/CAI3G1.2/services/CAI3G1.2')
+      .replyOnce(500, responseBody)
+      .onPost('https://eda.example/CAI3G1.2/services/CAI3G1.2')
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><LoginResponse><sessionId>session-2</sessionId></LoginResponse></S:Body></S:Envelope>',
+      )
+      .onPost('https://eda.example/CAI3G1.2/services/CAI3G1.2')
       .replyOnce(500, responseBody);
 
     const client = new EdaClient({
@@ -535,6 +542,93 @@ describe('EdaClient', () => {
         ),
       },
     );
+    mock.restore();
+  });
+
+  it('re-authenticates once and retries an invalid session', async () => {
+    const mock = new MockAdapter(axios);
+    const endpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
+    const invalidSessionResponse = `<?xml version='1.0' encoding='UTF-8'?>
+      <S:Envelope xmlns:S="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cai3g="http://schemas.ericsson.com/cai3g1.2/">
+        <S:Body><ns2:Fault xmlns:ns2="http://schemas.xmlsoap.org/soap/envelope/">
+          <faultcode>ns2:Client</faultcode><faultstring>This is a client fault</faultstring>
+          <detail><Cai3gFault:Cai3gFault xmlns:Cai3gFault="http://schemas.ericsson.com/cai3g1.2/">
+            <faultcode>1001</faultcode><faultreason><reasonText>Invalid sessionId.</reasonText></faultreason>
+            <details><PGFault:PGFault xmlns:PGFault="http://schemas.ericsson.com/pg/1.0">
+              <errorcode>1010</errorcode><errormessage>Invalid sessionId.</errormessage>
+            </PGFault:PGFault></details>
+          </Cai3gFault:Cai3gFault></detail>
+        </ns2:Fault></S:Body></S:Envelope>`;
+
+    mock
+      .onPost(endpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><LoginResponse><sessionId>session-1</sessionId></LoginResponse></S:Body></S:Envelope>',
+      )
+      .onPost(endpoint)
+      .replyOnce(500, invalidSessionResponse)
+      .onPost(endpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><LoginResponse><sessionId>session-2</sessionId></LoginResponse></S:Body></S:Envelope>',
+      )
+      .onPost(endpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><GetResponse><MOAttributes><getResponseSubscription><obi>0</obi></getResponseSubscription></MOAttributes></GetResponse></S:Body></S:Envelope>',
+      );
+
+    const client = new EdaClient({
+      baseUrl: 'https://eda.example',
+      username: 'user',
+      password: 'pass',
+    });
+
+    const response = await client.getSubscriberStatus('271004887');
+
+    expect(response.data).toMatchObject({ obi: 0 });
+    expect(mock.history.post).toHaveLength(4);
+    expect(mock.history.post[1].data).toContain(
+      '<cai3:SessionId>session-1</cai3:SessionId>',
+    );
+    expect(mock.history.post[3].data).toContain(
+      '<cai3:SessionId>session-2</cai3:SessionId>',
+    );
+    mock.restore();
+  });
+
+  it('deduplicates simultaneous login requests', async () => {
+    const mock = new MockAdapter(axios);
+    const endpoint = 'https://eda.example/CAI3G1.2/services/CAI3G1.2';
+    mock
+      .onPost(endpoint)
+      .replyOnce(
+        200,
+        '<S:Envelope><S:Body><LoginResponse><sessionId>session-1</sessionId></LoginResponse></S:Body></S:Envelope>',
+      )
+      .onPost(endpoint)
+      .reply(
+        200,
+        '<S:Envelope><S:Body><GetResponse><MOAttributes><getResponseSubscription><obi>0</obi></getResponseSubscription></MOAttributes></GetResponse></S:Body></S:Envelope>',
+      );
+
+    const client = new EdaClient({
+      baseUrl: 'https://eda.example',
+      username: 'user',
+      password: 'pass',
+    });
+
+    await Promise.all([
+      client.getSubscriberStatus('271004887'),
+      client.getSubscriberStatus('271004888'),
+    ]);
+
+    expect(
+      mock.history.post.filter((request) =>
+        request.data.includes('<cai3:Login>'),
+      ),
+    ).toHaveLength(1);
     mock.restore();
   });
 

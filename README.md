@@ -40,7 +40,13 @@ Optional settings are:
 ## Usage
 
 The client logs in automatically before the first operation and reuses the
-session for subsequent operations. Call `logout()` when the client is done:
+session for subsequent operations. Login requests are single-flight, so
+concurrent operations share one login request. If EDA rejects an operation
+with a recognized expired or invalid session fault (`1001`, `1005`, `1010`, or
+`3014`), the client discards the affected cached session, authenticates again,
+rebuilds the SOAP request with the new session ID, and retries that operation
+once. Other EDA faults are returned unchanged. Call `logout()` when the client
+is done:
 
 ```ts
 const eda = new EdaClient({
@@ -124,6 +130,18 @@ await eda.getSubscriberStatus(msisdn, { sequenceId, transactionId });
 Each omitted ID is generated as a UUID, including when the entire options
 object is omitted. `sequenceId` and `transactionId` are generated independently
 for every SOAP operation. They are not the EDA session ID.
+
+### Session recovery
+
+EDA sessions can expire or be invalidated by the EDA platform while a client
+instance is still running. Session faults are recognized from the structured
+EDA fault code and are retried once after re-authentication. The original SOAP
+request is rebuilt so the retry contains the new session ID. A second session
+fault, a login failure, or any non-session EDA fault is raised to the caller.
+
+The cached session is local to an `EdaClient` instance. Applications that use a
+long-lived client should reuse that instance for related operations and should
+not call `logout()` while other operations are in progress.
 
 ### Return values
 
