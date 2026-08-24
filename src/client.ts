@@ -7,6 +7,7 @@ import {
   getSubscriberStatus,
   login,
   logout as logoutTemplate,
+  setSms,
   setVoice,
   unbarInternet,
 } from './templates';
@@ -236,6 +237,20 @@ export class EdaClient {
     return this.setVoice(msisdn, false, options);
   }
 
+  async barSms(
+    msisdn: string,
+    options?: EdaRequestOptions,
+  ): Promise<EdaResponse> {
+    return this.setSms(msisdn, true, options);
+  }
+
+  async unbarSms(
+    msisdn: string,
+    options?: EdaRequestOptions,
+  ): Promise<EdaResponse> {
+    return this.setSms(msisdn, false, options);
+  }
+
   async unbarInternet(
     msisdn: string,
     options?: EdaRequestOptions,
@@ -298,6 +313,23 @@ export class EdaClient {
     return this.executeWithSession(
       '/CAI3G1.2/services/CAI3G1.2',
       (sessionId) => setVoice(sessionId, normalized, barred, options),
+      operation,
+      {
+        msisdn: normalized,
+      },
+    );
+  }
+
+  private async setSms(
+    msisdn: string,
+    barred: boolean,
+    options?: EdaRequestOptions,
+  ): Promise<EdaResponse> {
+    const normalized = normalizeMsisdn(msisdn);
+    const operation = barred ? 'barSms' : 'unbarSms';
+    return this.executeWithSession(
+      '/CAI3G1.2/services/CAI3G1.2',
+      (sessionId) => setSms(sessionId, normalized, barred, options),
       operation,
       {
         msisdn: normalized,

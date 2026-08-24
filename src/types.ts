@@ -91,6 +91,8 @@ export interface SimSwapResponse {
 export interface SubscriberStatus {
   obi?: string;
   obo?: string;
+  ts21?: string;
+  ts22?: string;
   nam?: { prov?: string; keep?: string };
   [key: string]: unknown;
 }

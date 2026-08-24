@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.5
+
+- Add incoming and outgoing SMS barring and unbarring through HLR `ts21` and
+  `ts22` subscription values.
+
 ## 1.0.4
 
 - Recover once from expired or invalid EDA sessions by re-authenticating and

@@ -7,6 +7,7 @@ import {
   getSubscriberStatus,
   logout,
   setVoice,
+  setSms,
   unbarInternet,
 } from '../src/templates';
 
@@ -22,6 +23,7 @@ describe('EDA SOAP templates', () => {
       createHlr('session-1', '271004887', 'imsi-1', options),
       deleteHlr('session-1', '271004887', options),
       setVoice('session-1', '271004887', true, options),
+      setSms('session-1', '271004887', true, options),
       unbarInternet('session-1', '271004887', options),
       getSubscriberStatus('session-1', '271004887', options),
     ];
@@ -46,6 +48,7 @@ describe('EDA SOAP templates', () => {
       createHlr('session-1', '271004887', 'imsi-1'),
       deleteHlr('session-1', '271004887'),
       setVoice('session-1', '271004887', true),
+      setSms('session-1', '271004887', true),
       unbarInternet('session-1', '271004887'),
       getSubscriberStatus('session-1', '271004887'),
     ];
@@ -82,5 +85,13 @@ describe('EDA SOAP templates', () => {
     expect(transactionOnly).toContain(
       '<cai3g:TransactionId>transaction-1</cai3g:TransactionId>',
     );
+  });
+
+  it('sets both HLR SMS directions when barring and unblocking', () => {
+    const barred = setSms('session-1', '271004887', true);
+    const unbarred = setSms('session-1', '271004887', false);
+
+    expect(barred).toContain('<gsm:ts21>0</gsm:ts21><gsm:ts22>0</gsm:ts22>');
+    expect(unbarred).toContain('<gsm:ts21>1</gsm:ts21><gsm:ts22>1</gsm:ts22>');
   });
 });

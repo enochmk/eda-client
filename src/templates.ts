@@ -101,6 +101,24 @@ export function setVoice(
   );
 }
 
+/**
+ * Enables or disables mobile-terminated and mobile-originated SMS.
+ * TS21 is SMS MT/PP and TS22 is SMS MO/PP in the HLR subscription profile.
+ */
+export function setSms(
+  sessionId: string,
+  msisdn: string,
+  barred: boolean,
+  options?: EdaRequestOptions,
+): string {
+  const value = barred ? '0' : '1';
+  return envelope(
+    `<cai3g:Set><cai3g:MOType>Subscription@${HLR}</cai3g:MOType>${moId(msisdn)}<cai3g:MOAttributes><gsm:setSubscription msisdn="233${escapeXml(msisdn)}"><gsm:ts21>${value}</gsm:ts21><gsm:ts22>${value}</gsm:ts22></gsm:setSubscription></cai3g:MOAttributes></cai3g:Set>`,
+    sessionId,
+    options,
+  );
+}
+
 export function unbarInternet(
   sessionId: string,
   msisdn: string,

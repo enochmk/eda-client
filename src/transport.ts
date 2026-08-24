@@ -82,6 +82,8 @@ export class EdaTransport {
       deleteHlr: 'Delete',
       barVoice: 'Set',
       unbarVoice: 'Set',
+      barSms: 'Set',
+      unbarSms: 'Set',
       unbarInternet: 'Set',
       getSubscriberStatus: 'Get',
     };
