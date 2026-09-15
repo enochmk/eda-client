@@ -254,6 +254,7 @@ describe('EdaClient', () => {
       '271004887',
       '620031078646558',
       'abcdef0123456789abcdef0123456789',
+      { createHlr: { paidMode: 'PREPAID' } },
     );
     const requests = mock.history.post.slice(1);
     const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -350,6 +351,7 @@ describe('EdaClient', () => {
       oldImsi: 'old-imsi',
       targetImsi: 'target-imsi',
       targetKi: 'target-ki',
+      requests: { createHlr: { paidMode: 'PREPAID' } },
     });
     const requests = mock.history.post.slice(1);
 

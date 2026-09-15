@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+- Set HLR CSP to `220` and select `stype`/`rsa` from the explicit paid mode:
+  prepaid `0/3`, postpaid `2/1`, and hybrid `4/3`.
+- Require paid mode for HLR creation and add coverage for all mappings.
+
 ## 1.0.5
 
 - Add incoming and outgoing SMS barring and unbarring through HLR `ts21` and

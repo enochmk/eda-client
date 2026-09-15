@@ -20,7 +20,10 @@ describe('EDA SOAP templates', () => {
       logout('session-1', options),
       createAuc('session-1', 'imsi-1', 'ki-1', options),
       deleteAuc('session-1', 'imsi-1', options),
-      createHlr('session-1', '271004887', 'imsi-1', options),
+      createHlr('session-1', '271004887', 'imsi-1', {
+        ...options,
+        paidMode: 'PREPAID',
+      }),
       deleteHlr('session-1', '271004887', options),
       setVoice('session-1', '271004887', true, options),
       setSms('session-1', '271004887', true, options),
@@ -45,7 +48,7 @@ describe('EDA SOAP templates', () => {
       logout('session-1'),
       createAuc('session-1', 'imsi-1', 'ki-1'),
       deleteAuc('session-1', 'imsi-1'),
-      createHlr('session-1', '271004887', 'imsi-1'),
+      createHlr('session-1', '271004887', 'imsi-1', { paidMode: 'PREPAID' }),
       deleteHlr('session-1', '271004887'),
       setVoice('session-1', '271004887', true),
       setSms('session-1', '271004887', true),
@@ -94,4 +97,21 @@ describe('EDA SOAP templates', () => {
     expect(barred).toContain('<gsm:ts21>0</gsm:ts21><gsm:ts22>0</gsm:ts22>');
     expect(unbarred).toContain('<gsm:ts21>1</gsm:ts21><gsm:ts22>1</gsm:ts22>');
   });
+
+  it.each([
+    ['PREPAID', 0, 3],
+    ['POSTPAID', 2, 1],
+    ['HYBRID', 4, 3],
+  ] as const)(
+    'maps %s paid mode to HLR stype and rsa',
+    (paidMode, stype, rsa) => {
+      const payload = createHlr('session-1', '271004887', 'imsi-1', {
+        paidMode,
+      });
+
+      expect(payload).toContain('<gsm:csp>220</gsm:csp>');
+      expect(payload).toContain(`<gsm:stype>${stype}</gsm:stype>`);
+      expect(payload).toContain(`<gsm:rsa>${rsa}</gsm:rsa>`);
+    },
+  );
 });

@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { escapeXml } from './utils';
-import type { EdaRequestOptions } from './types';
+import type {
+  EdaRequestOptions,
+  HlrPaidMode,
+  HlrRequestOptions,
+} from './types';
 
 const SOAP = 'http://schemas.xmlsoap.org/soap/envelope/';
 const CAI = 'http://schemas.ericsson.com/cai3g1.2/';
@@ -65,9 +69,17 @@ export function createHlr(
   sessionId: string,
   msisdn: string,
   imsi: string,
-  options?: EdaRequestOptions,
+  options: HlrRequestOptions,
 ): string {
-  const attrs = `<gsm:createSubscription imsi="${escapeXml(imsi)}" msisdn="233${escapeXml(msisdn)}"><gsm:msisdn>233${escapeXml(msisdn)}</gsm:msisdn><gsm:imsi>${escapeXml(imsi)}</gsm:imsi><gsm:profileId>46</gsm:profileId><gsm:pdpcp>430</gsm:pdpcp><gsm:csp>3</gsm:csp><gsm:nam><gsm:prov>0</gsm:prov><gsm:keep>1</gsm:keep></gsm:nam><gsm:cfb><gsm:provisionState>1</gsm:provisionState><gsm:activationState>1</gsm:activationState><gsm:fnum>212</gsm:fnum></gsm:cfb><gsm:cfnrc><gsm:provisionState>1</gsm:provisionState><gsm:activationState>1</gsm:activationState><gsm:fnum>212</gsm:fnum></gsm:cfnrc><gsm:cfnry><gsm:provisionState>1</gsm:provisionState><gsm:activationState>1</gsm:activationState><gsm:fnum>212</gsm:fnum></gsm:cfnry><gsm:caw><gsm:provisionState>1</gsm:provisionState><gsm:ts10><gsm:activationState>1</gsm:activationState></gsm:ts10><gsm:bs30><gsm:activationState>1</gsm:activationState></gsm:bs30></gsm:caw><gsm:clir>0</gsm:clir><gsm:obi>0</gsm:obi><gsm:obo>0</gsm:obo><gsm:obr>0</gsm:obr><gsm:oick>60</gsm:oick><gsm:soclir>0</gsm:soclir><gsm:stype>0</gsm:stype><gsm:ts11>1</gsm:ts11><gsm:ts21>1</gsm:ts21><gsm:ts22>1</gsm:ts22><gsm:rsa>3</gsm:rsa><gsm:prbt>0</gsm:prbt></gsm:createSubscription>`;
+  const paidModeValues: Record<HlrPaidMode, { stype: number; rsa: number }> = {
+    PREPAID: { stype: 0, rsa: 3 },
+    POSTPAID: { stype: 2, rsa: 1 },
+    HYBRID: { stype: 4, rsa: 3 },
+  };
+  const mode = paidModeValues[options.paidMode];
+  if (!mode)
+    throw new Error(`Unsupported HLR paid mode '${String(options.paidMode)}'`);
+  const attrs = `<gsm:createSubscription imsi="${escapeXml(imsi)}" msisdn="233${escapeXml(msisdn)}"><gsm:msisdn>233${escapeXml(msisdn)}</gsm:msisdn><gsm:imsi>${escapeXml(imsi)}</gsm:imsi><gsm:profileId>46</gsm:profileId><gsm:pdpcp>430</gsm:pdpcp><gsm:csp>220</gsm:csp><gsm:nam><gsm:prov>0</gsm:prov><gsm:keep>1</gsm:keep></gsm:nam><gsm:cfb><gsm:provisionState>1</gsm:provisionState><gsm:activationState>1</gsm:activationState><gsm:fnum>212</gsm:fnum></gsm:cfb><gsm:cfnrc><gsm:provisionState>1</gsm:provisionState><gsm:activationState>1</gsm:activationState><gsm:fnum>212</gsm:fnum></gsm:cfnrc><gsm:cfnry><gsm:provisionState>1</gsm:provisionState><gsm:activationState>1</gsm:activationState><gsm:fnum>212</gsm:fnum></gsm:cfnry><gsm:caw><gsm:provisionState>1</gsm:provisionState><gsm:ts10><gsm:activationState>1</gsm:activationState></gsm:ts10><gsm:bs30><gsm:activationState>1</gsm:activationState></gsm:bs30></gsm:caw><gsm:clir>0</gsm:clir><gsm:obi>0</gsm:obi><gsm:obo>0</gsm:obo><gsm:obr>0</gsm:obr><gsm:oick>60</gsm:oick><gsm:soclir>0</gsm:soclir><gsm:stype>${mode.stype}</gsm:stype><gsm:ts11>1</gsm:ts11><gsm:ts21>1</gsm:ts21><gsm:ts22>1</gsm:ts22><gsm:rsa>${mode.rsa}</gsm:rsa><gsm:prbt>0</gsm:prbt></gsm:createSubscription>`;
   return envelope(
     `<cai3g:Create><cai3g:MOType>Subscription@${HLR}</cai3g:MOType>${moId(msisdn, imsi)}<cai3g:MOAttributes>${attrs}</cai3g:MOAttributes></cai3g:Create>`,
     sessionId,

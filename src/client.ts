@@ -18,6 +18,7 @@ import type {
   EdaRequestOptions,
   EdaResponse,
   EdaWarning,
+  HlrRequestOptions,
   Logger,
   RefreshNumberOptions,
   RefreshNumberResponse,
@@ -130,7 +131,7 @@ export class EdaClient {
   async createHlr(
     msisdn: string,
     imsi: string,
-    options?: EdaRequestOptions,
+    options: HlrRequestOptions,
   ): Promise<EdaResponse> {
     const normalized = normalizeMsisdn(msisdn);
     return this.executeWithSession(
@@ -155,6 +156,8 @@ export class EdaClient {
 
     const deleteHlrResponse = await this.deleteHlr(msisdn, options.deleteHlr);
     const deleteAucResponse = await this.deleteAuc(imsi, options.deleteAuc);
+    if (!options.createHlr)
+      throw new Error('HLR paid mode is required to refresh a number');
     const createHlrResponse = await this.createHlr(
       msisdn,
       imsi,
@@ -180,6 +183,8 @@ export class EdaClient {
     params: SimSwapParams,
   ): Promise<SimSwapResponse> {
     const { oldImsi, targetImsi, targetKi, requests = {} } = params;
+    if (!requests.createHlr)
+      throw new Error('HLR paid mode is required for a SIM swap');
     await this.getSessionId();
 
     const deleteHlrResponse = await this.deleteHlr(msisdn, requests.deleteHlr);

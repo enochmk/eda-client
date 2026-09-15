@@ -13,10 +13,16 @@ export interface EdaRequestOptions {
   transactionId?: string;
 }
 
+export type HlrPaidMode = 'PREPAID' | 'POSTPAID' | 'HYBRID';
+
+export interface HlrRequestOptions extends EdaRequestOptions {
+  paidMode: HlrPaidMode;
+}
+
 export interface RefreshNumberOptions {
   deleteHlr?: EdaRequestOptions;
   deleteAuc?: EdaRequestOptions;
-  createHlr?: EdaRequestOptions;
+  createHlr?: HlrRequestOptions;
   createAuc?: EdaRequestOptions;
   getHlr?: EdaRequestOptions;
 }
@@ -24,7 +30,7 @@ export interface RefreshNumberOptions {
 export interface SimSwapRequestOptions {
   deleteHlr?: EdaRequestOptions;
   deleteAuc?: EdaRequestOptions;
-  createHlr?: EdaRequestOptions;
+  createHlr?: HlrRequestOptions;
   createAuc?: EdaRequestOptions;
   getHlr?: EdaRequestOptions;
 }
