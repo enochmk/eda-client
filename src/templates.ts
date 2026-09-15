@@ -65,6 +65,15 @@ export function deleteAuc(
   return `<SOAP-ENV:Envelope xmlns:SOAP-ENV="${SOAP}" xmlns:cai3g="${CAI}" xmlns:gsm="${AUC}"><SOAP-ENV:Header><cai3g:SequenceId>${escapeXml(ids.sequenceId)}</cai3g:SequenceId><cai3g:TransactionId>${escapeXml(ids.transactionId)}</cai3g:TransactionId><cai3g:SessionId>${escapeXml(sessionId)}</cai3g:SessionId></SOAP-ENV:Header><SOAP-ENV:Body><cai3g:Delete><cai3g:MOType>Subscription@${AUC}</cai3g:MOType><cai3g:MOId><gsm:imsi>${escapeXml(imsi)}</gsm:imsi></cai3g:MOId></cai3g:Delete></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
 }
 
+export function getAuc(
+  sessionId: string,
+  imsi: string,
+  options?: EdaRequestOptions,
+): string {
+  const ids = resolveRequestIds(options);
+  return `<SOAP-ENV:Envelope xmlns:SOAP-ENV="${SOAP}" xmlns:cai3g="${CAI}" xmlns:auc="${AUC}"><SOAP-ENV:Header><cai3g:SequenceId>${escapeXml(ids.sequenceId)}</cai3g:SequenceId><cai3g:TransactionId>${escapeXml(ids.transactionId)}</cai3g:TransactionId><cai3g:SessionId>${escapeXml(sessionId)}</cai3g:SessionId></SOAP-ENV:Header><SOAP-ENV:Body><cai3g:Get><cai3g:MOType>Subscription@${AUC}</cai3g:MOType><cai3g:MOId><auc:imsi>${escapeXml(imsi)}</auc:imsi></cai3g:MOId><cai3g:MOAttributes></cai3g:MOAttributes><cai3g:extension></cai3g:extension></cai3g:Get></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+}
+
 export function createHlr(
   sessionId: string,
   msisdn: string,

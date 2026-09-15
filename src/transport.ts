@@ -78,6 +78,7 @@ export class EdaTransport {
       logout: 'Logout',
       createAuc: 'Create',
       deleteAuc: 'Delete',
+      getAuc: 'Get',
       createHlr: 'Create',
       deleteHlr: 'Delete',
       barVoice: 'Set',

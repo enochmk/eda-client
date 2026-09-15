@@ -20,6 +20,7 @@ export interface HlrRequestOptions extends EdaRequestOptions {
 }
 
 export interface RefreshNumberOptions {
+  getAuc?: EdaRequestOptions;
   deleteHlr?: EdaRequestOptions;
   deleteAuc?: EdaRequestOptions;
   createHlr?: HlrRequestOptions;

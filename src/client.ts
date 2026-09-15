@@ -3,6 +3,7 @@ import {
   createAuc,
   createHlr,
   deleteAuc,
+  getAuc,
   deleteHlr,
   getSubscriberStatus,
   login,
@@ -124,6 +125,15 @@ export class EdaClient {
       '/CAI3G1.2/services/CAI3G1.2',
       (sessionId) => deleteAuc(sessionId, imsi, options),
       'deleteAuc',
+      { imsi },
+    );
+  }
+
+  async getAuc(imsi: string, options?: EdaRequestOptions): Promise<EdaResponse> {
+    return this.executeWithSession(
+      '/CAI3G1.2/services/CAI3G1.2',
+      (sessionId) => getAuc(sessionId, imsi, options),
+      'getAuc',
       { imsi },
     );
   }
